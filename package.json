@@ -1,0 +1,34 @@
+{
+  "name": "cashier-bossque-carwash",
+  "version": "1.0.0",
+  "description": "Bossque Carwash Management Dashboard",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "next": "^15.0.0",
+    "firebase": "^11.0.0",
+    "lucide-react": "^0.294.0",
+    "fuse.js": "^7.0.0",
+    "react-hot-toast": "^2.4.1"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "eslint-config-next": "^15.0.0",
+    "autoprefixer": "^10.4.16",
+    "postcss": "^8.5.10",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.3.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "@types/node": "^20.0.0"
+  }
+}
