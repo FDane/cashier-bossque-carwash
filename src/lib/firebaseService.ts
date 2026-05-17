@@ -48,7 +48,7 @@ export async function uploadImageToFirebase(
   if (previousImagePath && previousImagePath !== imagePath) {
     try {
       await deleteObject(storageRef(storage, previousImagePath))
-    } catch (error) {
+    } catch {
       // ignore missing or already deleted object
     }
   }
@@ -63,7 +63,7 @@ export async function uploadImageToFirebase(
 export async function deleteTransactionImage(imagePath: string): Promise<void> {
   try {
     await deleteObject(storageRef(storage, imagePath))
-  } catch (error) {
+  } catch {
     // ignore if image already deleted or path does not exist
   }
 }

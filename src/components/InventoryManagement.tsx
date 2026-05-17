@@ -62,7 +62,7 @@ export default function InventoryManagement() {
       await addInventoryItem(newItem)
       setNewItem({ name: '', category: '', quantity: 0, lowStockThreshold: 5 })
       showToast.success(t('inventory.addSuccess' as any))
-    } catch (e) {
+    } catch {
       showToast.error(t('common.error' as any))
     } finally {
       setLoading(false)
@@ -94,7 +94,7 @@ export default function InventoryManagement() {
       try {
         await deleteInventoryItem(id)
         showToast.success(t('common.success' as any))
-      } catch (e) {
+      } catch {
         showToast.error(t('common.error' as any))
       }
     }

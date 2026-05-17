@@ -207,7 +207,7 @@ export default function CashierCheckout({
       try {
         await deleteTransaction(id, imagePath ?? undefined)
         showToast.success(t('cashier.deleteSuccess' as any) || 'Car removed from queue')
-      } catch (error) {
+      } catch {
         showToast.error('Error removing car')
       }
     }
@@ -219,7 +219,7 @@ export default function CashierCheckout({
       await updateTransaction(editingTransaction.id, editingTransaction)
       showToast.success(t('cashier.updateSuccess' as any) || 'Car updated successfully')
       setEditingTransaction(null)
-    } catch (error) {
+    } catch {
       showToast.error('Error updating car')
     }
   }
@@ -337,7 +337,7 @@ export default function CashierCheckout({
         <div className="text-center py-16">
           <Search className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
           <p className="text-zinc-500 text-lg font-medium">
-            {t('cashier.noResults' as any)} "{searchQuery}"
+            {t('cashier.noResults' as any)} &quot;{searchQuery}&quot;
           </p>
         </div>
       )}

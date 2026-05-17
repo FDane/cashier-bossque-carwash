@@ -44,7 +44,7 @@ export default function CustomerSection() {
       setPhone('')
       setPlate('')
       showToast.success(t('customer.addSuccess' as any))
-    } catch (e) {
+    } catch {
       showToast.error(t('common.error' as any))
     } finally {
       setLoading(false)
@@ -60,7 +60,7 @@ export default function CustomerSection() {
       const past = await getCustomerPastOrdersByPlate(searchPlate)
       setOrders(past)
       if (!cust) showToast.warning(t('cashier.noResults' as any))
-    } catch (e) {
+    } catch {
       showToast.error(t('common.error' as any))
     } finally {
       setSearching(false)

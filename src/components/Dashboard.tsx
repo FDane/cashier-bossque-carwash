@@ -15,14 +15,10 @@ export default function Dashboard() {
   const {
     transactions: pendingTransactions,
     loading: pendingLoading,
-    error: _pendingError,
   } = useTransactions('PENDING')
 
   // Listen to COMPLETED transactions (past records)
-  const {
-    transactions: completedTransactions,
-    error: _completedError,
-  } = useTransactions('COMPLETED')
+  const { transactions: completedTransactions } = useTransactions('COMPLETED')
 
       {/* Header is provided by AppHeader in layout */}
       return (
