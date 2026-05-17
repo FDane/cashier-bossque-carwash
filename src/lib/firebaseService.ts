@@ -12,6 +12,7 @@ import {
   getDocs,
   onSnapshot,
   Unsubscribe,
+  deleteDoc,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import {
@@ -64,7 +65,8 @@ export async function completeTransaction(
   transactionId: string,
   paymentMethod: PaymentMethod,
   cashReceived: number,
-  computedPrice: number
+  computedPrice: number,
+  addons: any[] = []
 ): Promise<void> {
   const balance = cashReceived - computedPrice
   const transactionRef = doc(db, TRANSACTIONS_COLLECTION, transactionId)
@@ -74,8 +76,28 @@ export async function completeTransaction(
     paymentMethod,
     cashReceived,
     balance,
+    addons,
     paidTime: serverTimestamp(),
   })
+}
+
+/**
+ * Delete a transaction (remove from queue)
+ */
+export async function deleteTransaction(transactionId: string): Promise<void> {
+  const transactionRef = doc(db, TRANSACTIONS_COLLECTION, transactionId)
+  await deleteDoc(transactionRef)
+}
+
+/**
+ * Update an existing transaction (edit details)
+ */
+export async function updateTransaction(
+  transactionId: string,
+  updates: Partial<Transaction>
+): Promise<void> {
+  const transactionRef = doc(db, TRANSACTIONS_COLLECTION, transactionId)
+  await updateDoc(transactionRef, updates)
 }
 
 /**
@@ -109,6 +131,7 @@ export function listenToTransactions(
         checkInTime: data.checkInTime?.toDate?.() || data.checkInTime,
         paidTime: data.paidTime?.toDate?.() || data.paidTime,
         notes: data.notes || '',
+        addons: data.addons || [],
       })
     })
     callback(transactions)
@@ -180,6 +203,33 @@ export function listenToPriceBooks(
 }
 
 /**
+ * Listen to all price book items for management view
+ */
+export function listenToFullPriceBook(
+  callback: (items: any[]) => void
+): Unsubscribe {
+  return onSnapshot(collection(db, PRICE_BOOK_COLLECTION), (snapshot) => {
+    const items: any[] = []
+    snapshot.forEach((d) => items.push({ id: d.id, ...d.data() }))
+    callback(items)
+  })
+}
+
+export async function addPriceBookItem(item: { brand: string; model: string; price: number }) {
+  return await addDoc(collection(db, PRICE_BOOK_COLLECTION), item)
+}
+
+export async function updatePriceBookItem(id: string, updates: Partial<any>) {
+  const ref = doc(db, PRICE_BOOK_COLLECTION, id)
+  await updateDoc(ref, updates)
+}
+
+export async function deletePriceBookItem(id: string) {
+  const ref = doc(db, PRICE_BOOK_COLLECTION, id)
+  await deleteDoc(ref)
+}
+
+/**
  * Get price by brand and model
  */
 export async function getPriceByBrandModel(
@@ -202,4 +252,195 @@ export async function getPriceByBrandModel(
 export async function getDailyStats(date: string): Promise<DailyStats | null> {
   const docSnapshot = await getDoc(doc(db, DAILY_STATS_COLLECTION, date))
   return docSnapshot.exists() ? (docSnapshot.data() as DailyStats) : null
+}
+
+// New collections for staff, attendance, inventory, customers
+const STAFF_COLLECTION = 'staff'
+const ATTENDANCE_COLLECTION = 'attendance'
+const INVENTORY_COLLECTION = 'inventory'
+const CUSTOMERS_COLLECTION = 'customers'
+
+function todayDateString() {
+  return new Date().toISOString().split('T')[0]
+}
+
+/**
+ * Attendance helpers
+ */
+export async function getAttendancesByDate(date: string) {
+  const q = query(
+    collection(db, ATTENDANCE_COLLECTION),
+    where('date', '==', date)
+  )
+  const snapshot = await getDocs(q)
+  const results: any[] = []
+  snapshot.forEach((d) => {
+    const data = d.data()
+    results.push({ id: d.id, ...data })
+  })
+  return results
+}
+
+export async function getStaffList() {
+  const snapshot = await getDocs(collection(db, STAFF_COLLECTION))
+  const results: any[] = []
+  snapshot.forEach((d) => results.push({ id: d.id, ...d.data() }))
+  return results
+}
+
+export async function getStaffById(staffId: string) {
+  const ref = doc(db, STAFF_COLLECTION, staffId)
+  const snap = await getDoc(ref)
+  return snap.exists() ? { id: snap.id, ...snap.data() } : null
+}
+
+export async function listenToTodayAttendance(callback: (rows: any[]) => void) {
+  const today = todayDateString()
+  const q = query(
+    collection(db, ATTENDANCE_COLLECTION),
+    where('date', '==', today)
+  )
+  return onSnapshot(q, (snapshot) => {
+    const rows: any[] = []
+    snapshot.forEach((d) => rows.push({ id: d.id, ...d.data() }))
+    callback(rows)
+  })
+}
+
+export async function clockOutAllToday(): Promise<void> {
+  const today = todayDateString()
+  const q = query(
+    collection(db, ATTENDANCE_COLLECTION),
+    where('date', '==', today),
+    where('checkOutTime', '==', null)
+  )
+  const snapshot = await getDocs(q)
+  const updates: Promise<void>[] = []
+  snapshot.forEach((d) => {
+    const ref = doc(db, ATTENDANCE_COLLECTION, d.id)
+    updates.push(updateDoc(ref, { checkOutTime: serverTimestamp() }))
+  })
+  await Promise.all(updates)
+}
+
+export async function addMoneyAdvanceForAttendance(attendanceId: string, amount: number) {
+  const ref = doc(db, ATTENDANCE_COLLECTION, attendanceId)
+  await updateDoc(ref, { moneyAdvance: increment(amount) })
+}
+
+export async function checkInStaff(staffId: string) {
+  const today = todayDateString()
+  const attendanceData = {
+    staffId,
+    date: today,
+    checkInTime: serverTimestamp(),
+    checkOutTime: null,
+    moneyAdvance: 0,
+  }
+  const docRef = await addDoc(collection(db, ATTENDANCE_COLLECTION), attendanceData)
+  return docRef.id
+}
+
+/**
+ * Inventory helpers
+ */
+export async function addInventoryItem(item: {
+  name: string
+  category: string
+  quantity: number
+  lowStockThreshold?: number
+}) {
+  const docRef = await addDoc(collection(db, INVENTORY_COLLECTION), {
+    ...item,
+  })
+  return docRef.id
+}
+
+export async function updateInventoryItem(itemId: string, updates: Partial<any>) {
+  const ref = doc(db, INVENTORY_COLLECTION, itemId)
+  await updateDoc(ref, updates)
+}
+
+/**
+ * Delete an inventory item
+ */
+export async function deleteInventoryItem(itemId: string): Promise<void> {
+  const ref = doc(db, INVENTORY_COLLECTION, itemId)
+  await deleteDoc(ref)
+}
+
+export async function updateInventoryQuantity(itemId: string, delta: number) {
+  const ref = doc(db, INVENTORY_COLLECTION, itemId)
+  await updateDoc(ref, { quantity: increment(delta) })
+}
+
+export async function decrementInventoryByOne(itemId: string) {
+  return updateInventoryQuantity(itemId, -1)
+}
+
+export async function getLowStockItems() {
+  const snapshot = await getDocs(collection(db, INVENTORY_COLLECTION))
+  const results: any[] = []
+  snapshot.forEach((d) => {
+    const data = d.data()
+    const threshold = data.lowStockThreshold ?? 5
+    if ((data.quantity ?? 0) <= threshold) results.push({ id: d.id, ...data })
+  })
+  return results
+}
+
+export async function getInventoryList() {
+  const snapshot = await getDocs(collection(db, INVENTORY_COLLECTION))
+  const results: any[] = []
+  snapshot.forEach((d) => results.push({ id: d.id, ...d.data() }))
+  return results
+}
+
+export function listenToInventory(callback: (items: any[]) => void) {
+  return onSnapshot(collection(db, INVENTORY_COLLECTION), (snapshot) => {
+    const items: any[] = []
+    snapshot.forEach((d) => items.push({ id: d.id, ...d.data() }))
+    callback(items)
+  })
+}
+
+/**
+ * Past car search
+ */
+export async function getTransactionsByPlate(plateNumber: string) {
+  const plate = plateNumber.toUpperCase()
+  const q = query(
+    collection(db, TRANSACTIONS_COLLECTION),
+    where('plateNumber', '==', plate)
+  )
+  const snapshot = await getDocs(q)
+  const results: any[] = []
+  snapshot.forEach((d) => results.push({ id: d.id, ...d.data() }))
+  return results
+}
+
+/**
+ * Customer helpers
+ */
+export async function addCustomer(customer: { name: string; phone?: string; plate?: string }) {
+  const data: any = {
+    name: customer.name,
+    phone: customer.phone || null,
+    plates: customer.plate ? [customer.plate.toUpperCase()] : [],
+    createdAt: serverTimestamp(),
+  }
+  const docRef = await addDoc(collection(db, CUSTOMERS_COLLECTION), data)
+  return docRef.id
+}
+
+export async function getCustomerByPlate(plate: string) {
+  const q = query(collection(db, CUSTOMERS_COLLECTION), where('plates', 'array-contains', plate.toUpperCase()))
+  const snapshot = await getDocs(q)
+  if (snapshot.empty) return null
+  const d = snapshot.docs[0]
+  return { id: d.id, ...d.data() }
+}
+
+export async function getCustomerPastOrdersByPlate(plate: string) {
+  return getTransactionsByPlate(plate)
 }

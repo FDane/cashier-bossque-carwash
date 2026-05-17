@@ -9,10 +9,15 @@ import {
   ChevronRight,
   Loader2,
   AlertCircle,
+  Plus,
+  Minus,
+  ShoppingBag,
+  Edit,
+  Trash2,
 } from 'lucide-react'
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
-import { completeTransaction, updateDailyStats } from '@/lib/firebaseService'
+import { completeTransaction, updateDailyStats, deleteTransaction, updateTransaction } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency, formatTime } from '@/lib/utils'
 
@@ -27,10 +32,25 @@ const SERVICE_CATEGORIES = {
   engine: { ms: 'Enjin', en: 'Engine' },
 }
 
+const RETAIL_ITEMS = [
+  { id: 'microfiber', name: 'Microfiber Cloth', price: 10 },
+  { id: 'fragrance', name: 'Dwangi Fragrance', price: 11 },
+  { id: 'tyreshine', name: 'Tyre Shine (Bottle)', price: 25 },
+  { id: 'wiper', name: 'Wiper Fluid', price: 8 },
+]
+
+interface SelectedAddon {
+  id: string
+  name: string
+  price: number
+  quantity: number
+}
+
 interface CheckoutModalData {
   transaction: Transaction | null
   paymentMethod: PaymentMethod
   cashReceived: number
+  selectedAddons: SelectedAddon[]
 }
 
 export default function CashierCheckout({
@@ -43,7 +63,9 @@ export default function CashierCheckout({
     transaction: null,
     paymentMethod: null,
     cashReceived: 0,
+    selectedAddons: [],
   })
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
 
   // Local filtering: No extra Firebase cost
@@ -55,19 +77,30 @@ export default function CashierCheckout({
     )
   }, [pendingTransactions, searchQuery, language])
 
+  // Calculate total with addons
+  const totalWithAddons = useMemo(() => {
+    if (!checkoutModal.transaction) return 0
+    const addonsTotal = checkoutModal.selectedAddons.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0
+    )
+    return checkoutModal.transaction.computedPrice + addonsTotal
+  }, [checkoutModal.transaction, checkoutModal.selectedAddons])
+
   // Calculate balance in real-time
   const balance = useMemo(() => {
     if (!checkoutModal.transaction || checkoutModal.paymentMethod !== 'CASH') {
       return 0
     }
-    return checkoutModal.cashReceived - checkoutModal.transaction.computedPrice
-  }, [checkoutModal.transaction, checkoutModal.paymentMethod, checkoutModal.cashReceived, language])
+    return checkoutModal.cashReceived - totalWithAddons
+  }, [totalWithAddons, checkoutModal.paymentMethod, checkoutModal.cashReceived])
 
   const handleCardClick = (transaction: Transaction) => {
     setCheckoutModal({
       transaction,
       paymentMethod: null,
       cashReceived: 0,
+      selectedAddons: [],
     })
   }
 
@@ -87,6 +120,59 @@ export default function CashierCheckout({
     })
   }
 
+  const handleAddAddon = (item: { id: string; name: string; price: number }) => {
+    setCheckoutModal((prev) => {
+      const existing = prev.selectedAddons.find((a) => a.id === item.id)
+      if (existing) {
+        return {
+          ...prev,
+          selectedAddons: prev.selectedAddons.map((a) =>
+            a.id === item.id ? { ...a, quantity: a.quantity + 1 } : a
+          ),
+        }
+      }
+      return {
+        ...prev,
+        selectedAddons: [...prev.selectedAddons, { ...item, quantity: 1 }],
+      }
+    })
+  }
+
+  const handleUpdateAddonQty = (id: string, delta: number) => {
+    setCheckoutModal((prev) => ({
+      ...prev,
+      selectedAddons: prev.selectedAddons
+        .map((a) => (a.id === id ? { ...a, quantity: Math.max(0, a.quantity + delta) } : a))
+        .filter((a) => a.quantity > 0),
+    }))
+  }
+
+  const handleEditClick = (transaction: Transaction) => {
+    setEditingTransaction({ ...transaction })
+  }
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm(t('cashier.confirmDelete' as any) || 'Are you sure you want to remove this car?')) {
+      try {
+        await deleteTransaction(id)
+        showToast.success(t('cashier.deleteSuccess' as any) || 'Car removed from queue')
+      } catch (error) {
+        showToast.error('Error removing car')
+      }
+    }
+  }
+
+  const handleUpdate = async () => {
+    if (!editingTransaction) return
+    try {
+      await updateTransaction(editingTransaction.id, editingTransaction)
+      showToast.success(t('cashier.updateSuccess' as any) || 'Car updated successfully')
+      setEditingTransaction(null)
+    } catch (error) {
+      showToast.error('Error updating car')
+    }
+  }
+
   const handleCheckout = async () => {
     if (!checkoutModal.transaction || !checkoutModal.paymentMethod) {
       showToast.warning(t('payment.error.invalidCash' as any))
@@ -96,7 +182,7 @@ export default function CashierCheckout({
     // Validate cash amount if payment is CASH
     if (
       checkoutModal.paymentMethod === 'CASH' &&
-      checkoutModal.cashReceived < checkoutModal.transaction.computedPrice
+      checkoutModal.cashReceived < totalWithAddons
     ) {
       showToast.error(t('payment.error.invalidCash' as any))
       return
@@ -110,13 +196,14 @@ export default function CashierCheckout({
         checkoutModal.transaction.id,
         checkoutModal.paymentMethod,
         checkoutModal.cashReceived,
-        checkoutModal.transaction.computedPrice
+        totalWithAddons,
+        checkoutModal.selectedAddons
       )
 
       // Update daily stats with revenue and car level
       await updateDailyStats(
         checkoutModal.paymentMethod,
-        checkoutModal.transaction.computedPrice,
+        totalWithAddons,
         pendingTransactions.length
       )
 
@@ -127,6 +214,7 @@ export default function CashierCheckout({
         transaction: null,
         paymentMethod: null,
         cashReceived: 0,
+        selectedAddons: [],
       })
     } catch (error) {
       console.error('Error processing checkout:', error)
@@ -141,15 +229,16 @@ export default function CashierCheckout({
       transaction: null,
       paymentMethod: null,
       cashReceived: 0,
+      selectedAddons: [],
     })
   }
 
   return (
     <div className="space-y-6 sm:space-y-8">
       {/* Header with Search - No longer sticky for better mobile space */}
-      <div className="z-40 pt-4 pb-6 bg-transparent transition-all duration-300">
+      <div className="pt-2 pb-4 sm:pt-4 sm:pb-6 bg-transparent transition-all duration-300">
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-premium-lg overflow-hidden">
-          <div className="p-6 sm:p-8 border-b border-zinc-100 dark:border-zinc-800/50">
+          <div className="p-5 sm:p-8 border-b border-zinc-100 dark:border-zinc-800/50">
             <h2 className="text-3xl sm:text-4xl font-black text-zinc-900 dark:text-white tracking-tight mb-2">
               {t('cashier.title' as any)}
             </h2>
@@ -164,7 +253,7 @@ export default function CashierCheckout({
             </div>
           </div>
           
-          <div className="p-6 sm:p-8 bg-zinc-50/50 dark:bg-zinc-800/20">
+          <div className="p-5 sm:p-8 bg-zinc-50/50 dark:bg-zinc-800/20">
             <div className="relative group">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-zinc-400 group-focus-within:text-blue-500 transition-colors" />
               <input
@@ -205,61 +294,87 @@ export default function CashierCheckout({
       {!transactionsLoading && filteredTransactions.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
           {filteredTransactions.map((transaction) => (
-            <button
+            <div
               key={transaction.id}
-              onClick={() => handleCardClick(transaction)}
-              className="text-left group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500 rounded-2xl p-5 sm:p-7 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 transform hover:-translate-y-1"
+              className="relative text-left group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500 rounded-2xl p-5 sm:p-7 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 transform hover:-translate-y-1"
             >
-              <div className="flex justify-between items-start mb-3">
-                <div>
-                  <div className="text-zinc-500 text-xs uppercase font-semibold mb-1">
+              <div className="mb-4">
+                <div className="flex justify-between items-center mb-2">
+                  <div className="text-zinc-500 text-xs uppercase font-semibold">
                     {t('payment.plateNumber' as any)}
                   </div>
+                  <div className="flex items-center gap-1">
+                    <button 
+                      onClick={() => handleEditClick(transaction)}
+                      className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                      title="Edit car"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(transaction.id)}
+                      className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                      title="Remove car"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                    <ChevronRight className="w-5 h-5 text-zinc-600" />
+                  </div>
+                </div>
+
+                <div 
+                  className="cursor-pointer"
+                  onClick={() => handleCardClick(transaction)}
+                >
                   <div className="text-zinc-900 dark:text-white text-2xl sm:text-3xl font-bold font-mono tracking-wider">
                     {transaction.plateNumber}
                   </div>
                 </div>
-                <ChevronRight className="w-5 h-5 text-zinc-600 group-hover:text-blue-400 transition" />
               </div>
 
-              <div className="space-y-2 mb-4">
-                <div className="flex justify-between text-base">
-                  <span className="text-zinc-600 dark:text-zinc-400 font-medium">
-                    {transaction.brand} {transaction.model}
-                  </span>
-                  <span className="text-zinc-500 text-xs">{t(`color.${transaction.color}` as any)}</span>
+              <div 
+                className="cursor-pointer"
+                onClick={() => handleCardClick(transaction)}
+              >
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between text-base">
+                    <span className="text-zinc-600 dark:text-zinc-400 font-medium">
+                      {transaction.brand} {transaction.model}
+                    </span>
+                    <span className="text-zinc-500 text-xs">{t(`color.${transaction.color}` as any)}</span>
+                  </div>
+
+                  {/* Service Tags */}
+                  <div className="flex gap-2 flex-wrap mt-3">
+                    {transaction.services.exterior && (
+                      <span className="px-3 py-1 bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 text-xs rounded-full font-bold">
+                        {SERVICE_CATEGORIES.exterior[language as 'en' | 'ms']}
+                      </span>
+                    )}
+                    {transaction.services.interior && (
+                      <span className="px-3 py-1 bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-300 text-xs rounded-full font-bold">
+                        {SERVICE_CATEGORIES.interior[language as 'en' | 'ms']}
+                      </span>
+                    )}
+                    {transaction.services.engine && (
+                      <span className="px-3 py-1 bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 text-xs rounded-full font-bold">
+                        {SERVICE_CATEGORIES.engine[language as 'en' | 'ms']}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                {/* Service Tags */}
-                <div className="flex gap-2 flex-wrap mt-3">
-                  {transaction.services.exterior && (
-                    <span className="px-3 py-1 bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 text-xs rounded-full font-bold">
-                      {SERVICE_CATEGORIES.exterior[language as 'en' | 'ms']}
-                    </span>
-                  )}
-                  {transaction.services.interior && (
-                    <span className="px-3 py-1 bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-300 text-xs rounded-full font-bold">
-                      {SERVICE_CATEGORIES.interior[language as 'en' | 'ms']}
-                    </span>
-                  )}
-                  {transaction.services.engine && (
-                    <span className="px-3 py-1 bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 text-xs rounded-full font-bold">
-                      {SERVICE_CATEGORIES.engine[language as 'en' | 'ms']}
-                    </span>
-                  )}
+                {/* Time & Price */}
+                <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 flex justify-between items-end">
+                  <div className="text-xs text-zinc-500 font-medium">
+                    {formatTime(transaction.checkInTime)}
+                  </div>
+                  <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">
+                    {formatCurrency(transaction.computedPrice)}
+                  </div>
                 </div>
               </div>
-
-              {/* Time & Price */}
-              <div className="border-t border-zinc-700 pt-3 flex justify-between items-end">
-                <div className="text-xs text-zinc-500 font-medium">
-                  {formatTime(transaction.checkInTime)}
-                </div>
-                <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">
-                  {formatCurrency(transaction.computedPrice)}
-                </div>
-              </div>
-            </button>
+            </div>
           ))}
         </div>
       )}
@@ -307,10 +422,63 @@ export default function CashierCheckout({
                       {t('payment.totalAmount' as any)}
                     </div>
                     <div className="text-3xl sm:text-4xl font-black text-blue-600 dark:text-blue-400">
-                      {formatCurrency(checkoutModal.transaction.computedPrice)}
+                      {formatCurrency(totalWithAddons)}
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Add-ons Section */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold text-zinc-900 dark:text-zinc-300">
+                    {t('cashier.retailAddons' as any) || 'Retail Add-ons'}
+                  </label>
+                  <ShoppingBag className="w-4 h-4 text-zinc-500" />
+                </div>
+                
+                {/* Available Items */}
+                <div className="flex flex-wrap gap-2">
+                  {RETAIL_ITEMS.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleAddAddon(item)}
+                      className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-2"
+                    >
+                      <Plus className="w-3 h-3" />
+                      {item.name} ({formatCurrency(item.price)})
+                    </button>
+                  ))}
+                </div>
+
+                {/* Selected Items List */}
+                {checkoutModal.selectedAddons.length > 0 && (
+                  <div className="space-y-2 mt-2">
+                    {checkoutModal.selectedAddons.map((addon) => (
+                      <div key={addon.id} className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-zinc-100 dark:border-zinc-700/50">
+                        <div>
+                          <div className="text-sm font-medium text-zinc-900 dark:text-white">{addon.name}</div>
+                          <div className="text-xs text-zinc-500">{formatCurrency(addon.price)} / unit</div>
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <button
+                            onClick={() => handleUpdateAddonQty(addon.id, -1)}
+                            className="p-1 rounded-md bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-red-500/20 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+                          >
+                            <Minus className="w-4 h-4" />
+                          </button>
+                          <span className="text-sm font-bold text-zinc-900 dark:text-white w-4 text-center">{addon.quantity}</span>
+                          <button
+                            onClick={() => handleUpdateAddonQty(addon.id, 1)}
+                            className="p-1 rounded-md bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-green-500/20 hover:text-green-600 dark:hover:text-green-400 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Payment Method Selection */}
@@ -408,7 +576,7 @@ export default function CashierCheckout({
                     {t('payment.qrInstruction' as any)}
                   </p>
                   <p className="text-white font-semibold mt-2">
-                    {formatCurrency(checkoutModal.transaction.computedPrice)}
+                    {formatCurrency(totalWithAddons)}
                   </p>
                 </div>
               )}
@@ -425,6 +593,95 @@ export default function CashierCheckout({
               >
                 {processingId ? <Loader2 className="w-6 h-6 animate-spin" /> : null}
                 <span>{t('payment.checkout' as any)}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingTransaction && (
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">Edit Car Details</h3>
+              <button
+                onClick={() => setEditingTransaction(null)}
+                className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">Plate Number</label>
+                  <input
+                    type="text"
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-lg font-mono font-bold uppercase"
+                    value={editingTransaction.plateNumber}
+                    onChange={(e) => setEditingTransaction({...editingTransaction, plateNumber: e.target.value.toUpperCase()})}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">Brand</label>
+                    <input
+                      type="text"
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3"
+                      value={editingTransaction.brand}
+                      onChange={(e) => setEditingTransaction({...editingTransaction, brand: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">Model</label>
+                    <input
+                      type="text"
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3"
+                      value={editingTransaction.model}
+                      onChange={(e) => setEditingTransaction({...editingTransaction, model: e.target.value})}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-zinc-500 mb-2 uppercase tracking-wider">Services</label>
+                  <div className="flex flex-wrap gap-3">
+                    {(['exterior', 'interior', 'engine'] as const).map((s) => (
+                      <button
+                        key={s}
+                        onClick={() => setEditingTransaction({
+                          ...editingTransaction,
+                          services: { ...editingTransaction.services, [s]: !editingTransaction.services[s] }
+                        })}
+                        className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${
+                          editingTransaction.services[s]
+                            ? 'bg-blue-600 border-blue-500 text-white'
+                            : 'bg-zinc-100 dark:bg-zinc-800 border-transparent text-zinc-500'
+                        }`}
+                      >
+                        {SERVICE_CATEGORIES[s][language as 'en' | 'ms']}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 flex gap-3">
+              <button
+                onClick={() => setEditingTransaction(null)}
+                className="flex-1 py-4 text-zinc-600 dark:text-zinc-400 font-bold hover:text-zinc-900 dark:hover:text-white transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleUpdate}
+                className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg shadow-blue-500/20"
+              >
+                Save Changes
               </button>
             </div>
           </div>

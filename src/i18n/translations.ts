@@ -5,6 +5,18 @@ export const translations = {
     'header.dashboard': 'Dashboard',
     'header.language': 'Language',
 
+    // Navigation
+    'nav.home': 'Home',
+    'nav.staff': 'Staff',
+    'nav.inventory': 'Inventory',
+    'nav.pastCars': 'Past Cars',
+    'nav.customers': 'Customers',
+    'nav.priceBook': 'Price List',
+
+    // App General
+    'app.subtitle': 'Management System',
+    'app.footer': 'Bossque Carwash Management System. Built with Next.js & Firebase.',
+
     // Phase 1: Intake
     'intake.title': 'Car Entry Intake',
     'intake.subtitle': 'Register incoming vehicle',
@@ -34,6 +46,44 @@ export const translations = {
     'cashier.queueCount': 'Cars waiting:',
     'cashier.noResults': 'No vehicles found',
     'cashier.emptyQueue': 'The queue is currently empty',
+    'cashier.retailAddons': 'Add-on Retail Items',
+    'cashier.confirmDelete': 'Are you sure you want to remove this car?',
+    'cashier.deleteSuccess': 'Car removed from queue',
+    'cashier.updateSuccess': 'Car updated successfully',
+
+    // Customer
+    'customer.title': 'Customer Management',
+    'customer.addTitle': 'Add New Customer',
+    'customer.searchTitle': 'Search Customer',
+    'customer.pastOrders': 'Past Orders',
+    'customer.noOrders': 'No past orders found',
+    'customer.name': 'Customer Name',
+    'customer.phone': 'Phone Number',
+    'customer.plate': 'Plate Number',
+    'customer.addSuccess': 'Customer added successfully',
+    'customer.searchPlaceholder': 'Enter Plate Number...',
+
+    // Inventory
+    'inventory.title': 'Inventory Management',
+    'inventory.search': 'Search items...',
+    'inventory.addTitle': 'Add New Item',
+    'inventory.lowStock': 'Low Stock Alerts',
+    'inventory.name': 'Item Name',
+    'inventory.category': 'Category',
+    'inventory.quantity': 'Quantity',
+    'inventory.addSuccess': 'Item added successfully',
+    'inventory.deleteConfirm': 'Are you sure you want to delete this item?',
+
+    // Past Cars
+    'pastCars.title': 'Past Car Records',
+    'pastCars.search': 'Search Plate Records',
+
+    // Price Book
+    'priceBook.title': 'Price List Management',
+    'priceBook.brand': 'Brand',
+    'priceBook.model': 'Model',
+    'priceBook.price': 'Base Price',
+    'priceBook.addTitle': 'Add New Car Price',
 
     // Payment Modal
     'payment.title': 'Payment Settlement',
@@ -54,6 +104,17 @@ export const translations = {
     'payment.success': 'Payment processed successfully',
     'payment.error': 'Error processing payment',
 
+    // Staff Management
+    'staff.title': 'Staff Management — Today',
+    'staff.selectAll': 'Select all',
+    'staff.clockOutSelected': 'Clock Out Selected',
+    'staff.name': 'Staff Name',
+    'staff.checkIn': 'Check In',
+    'staff.checkOut': 'Check Out',
+    'staff.advance': 'Advance (RM)',
+    'staff.actions': 'Actions',
+    'staff.addAdvance': 'Add',
+
     // Stats
     'stats.totalQueue': 'Total Queue',
     'stats.completedToday': 'Completed Today',
@@ -61,6 +122,7 @@ export const translations = {
     'stats.avgPerCar': 'Avg. Per Car',
 
     // Common
+    'common.add': 'Add',
     'common.close': 'Close',
     'common.confirm': 'Confirm',
     'common.cancel': 'Cancel',
@@ -92,6 +154,18 @@ export const translations = {
     'header.dashboard': 'Papan Pemuka',
     'header.language': 'Bahasa',
 
+    // Navigation
+    'nav.home': 'Utama',
+    'nav.staff': 'Staff',
+    'nav.inventory': 'Inventori',
+    'nav.pastCars': 'Rekod Lama',
+    'nav.customers': 'Pelanggan',
+    'nav.priceBook': 'Senarai Harga',
+
+    // App General
+    'app.subtitle': 'Sistem Pengurusan',
+    'app.footer': 'Sistem Pengurusan Bossque Carwash. Dibina dengan Next.js & Firebase.',
+
     // Phase 1: Intake
     'intake.title': 'Rekod Kenderaan',
     'intake.subtitle': 'Daftarkan kenderaan yang masuk',
@@ -115,12 +189,50 @@ export const translations = {
     'intake.success': 'Kereta berjaya ditambah ke queue',
 
     // Phase 2: Cashier
-    'cashier.title': 'Penyelesaian Bayaran Kenderaan',
+    'cashier.title': 'Kaunter Bayaran Kenderaan',
     'cashier.search': 'Cari No Plat Kenderaan...',
-    'cashier.queue': 'Queue Aktif',
+    'cashier.queue': 'Kenderaan belum bayar',
     'cashier.queueCount': 'Kereta menunggu:',
     'cashier.noResults': 'Tiada kenderaan dijumpai',
     'cashier.emptyQueue': 'Queue kosong',
+    'cashier.retailAddons': 'Tambahan Barangan Runcit',
+    'cashier.confirmDelete': 'Adakah anda pasti mahu memadam kereta ini?',
+    'cashier.deleteSuccess': 'Kereta dikeluarkan dari queue',
+    'cashier.updateSuccess': 'Maklumat kereta dikemas kini',
+
+    // Customer
+    'customer.title': 'Pengurusan Pelanggan',
+    'customer.addTitle': 'Tambah Pelanggan Baru',
+    'customer.searchTitle': 'Cari Pelanggan',
+    'customer.pastOrders': 'Rekod Pesanan Terdahulu',
+    'customer.noOrders': 'Tiada rekod pesanan dijumpai',
+    'customer.name': 'Nama Pelanggan',
+    'customer.phone': 'No Telefon',
+    'customer.plate': 'No Plat',
+    'customer.addSuccess': 'Pelanggan berjaya ditambah',
+    'customer.searchPlaceholder': 'Masukkan No Plat...',
+
+    // Inventory
+    'inventory.title': 'Pengurusan Inventori',
+    'inventory.search': 'Cari barang...',
+    'inventory.addTitle': 'Tambah Barang Baru',
+    'inventory.lowStock': 'Amaran Stok Rendah',
+    'inventory.name': 'Nama Barang',
+    'inventory.category': 'Kategori',
+    'inventory.quantity': 'Kuantiti',
+    'inventory.addSuccess': 'Barang berjaya ditambah',
+    'inventory.deleteConfirm': 'Adakah anda pasti mahu memadam barang ini?',
+
+    // Past Cars
+    'pastCars.title': 'Rekod Kenderaan Lama',
+    'pastCars.search': 'Cari Rekod No Plat',
+
+    // Price Book
+    'priceBook.title': 'Pengurusan Senarai Harga',
+    'priceBook.brand': 'Jenama',
+    'priceBook.model': 'Model',
+    'priceBook.price': 'Harga Asas',
+    'priceBook.addTitle': 'Tambah Harga Kereta Baru',
 
     // Payment Modal
     'payment.title': 'Penyelesaian Pembayaran',
@@ -141,6 +253,17 @@ export const translations = {
     'payment.success': 'Pembayaran berjaya diproses',
     'payment.error': 'Ralat memproses pembayaran',
 
+    // Staff Management
+    'staff.title': 'Pengurusan Kakitangan — Hari Ini',
+    'staff.selectAll': 'Pilih semua',
+    'staff.clockOutSelected': 'Clock Out Pilihan',
+    'staff.name': 'Nama Kakitangan',
+    'staff.checkIn': 'Masa Masuk',
+    'staff.checkOut': 'Masa Keluar',
+    'staff.advance': 'Pendahuluan (RM)',
+    'staff.actions': 'Tindakan',
+    'staff.addAdvance': 'Tambah',
+
 
     // Stats
     'stats.totalQueue': 'Jumlah Queue',
@@ -149,6 +272,7 @@ export const translations = {
     'stats.avgPerCar': 'Purata Per Kereta',
 
     // Common
+    'common.add': 'Tambah',
     'common.close': 'Tutup',
     'common.confirm': 'Sahkan',
     'common.cancel': 'Batal',

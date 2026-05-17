@@ -360,3 +360,86 @@ gcloud firestore import gs://your-bucket/backup
 3. **Real-time Listeners**: Manage listener lifecycle to prevent memory leaks
 4. **Data Pagination**: Implement pagination for large result sets
 5. **Caching**: Use client-side state management to cache frequently accessed data
+
+---
+
+## New Collections Added
+
+### `/staff`
+Stores staff profile information (linked to Firebase Auth UID when available).
+
+**Document ID:** Auto-generated or Auth UID
+
+**Schema:**
+```typescript
+{
+  displayName: string,
+  email?: string,
+  role?: 'ADMIN' | 'CASHIER' | 'STAFF',
+  createdAt: Timestamp,
+}
+```
+
+### `/attendance`
+Attendance records per staff per date. Use `date` in YYYY-MM-DD format to query today's attendees.
+
+**Document ID:** Auto-generated
+
+**Schema:**
+```typescript
+{
+  staffId: string,        // reference to staff document id
+  date: string,          // YYYY-MM-DD
+  checkInTime: Timestamp,
+  checkOutTime: Timestamp | null,
+  moneyAdvance: number,  // total advances given today
+}
+```
+
+### `/inventory`
+Inventory items and quantities.
+
+**Document ID:** Auto-generated
+
+**Schema:**
+```typescript
+{
+  name: string,
+  category: string,
+  quantity: number,
+  lowStockThreshold?: number,
+}
+```
+
+### `/customers`
+Customer profiles with saved plates and contact info.
+
+**Document ID:** Auto-generated
+
+**Schema:**
+```typescript
+{
+  name: string,
+  phone?: string,
+  plates: string[],      // list of plate numbers associated with this customer
+  createdAt: Timestamp,
+}
+```
+
+**Example Queries:**
+
+Get today's attendance:
+```javascript
+query(
+  collection(db, 'attendance'),
+  where('date', '==', '2024-01-15')
+)
+```
+
+Find customer by plate:
+```javascript
+query(
+  collection(db, 'customers'),
+  where('plates', 'array-contains', 'ABC1234')
+)
+```

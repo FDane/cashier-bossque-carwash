@@ -5,7 +5,7 @@ import { listenToTransactions } from '@/lib/firebaseService'
 export function useTransactions(status: TransactionStatus) {
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [error, _setError] = useState<string | null>(null)
 
   useEffect(() => {
     setLoading(true)

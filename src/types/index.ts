@@ -23,6 +23,7 @@ export interface Transaction {
   checkInTime: Date | number
   paidTime: Date | number | null
   notes?: string
+  addons?: string[]
 }
 
 export interface PriceBook {
@@ -59,4 +60,39 @@ export interface CheckoutData {
   paymentMethod: PaymentMethod
   cashReceived: number
   balance: number
+}
+
+// Staff & Attendance
+export interface Staff {
+  id: string
+  displayName: string
+  role?: 'ADMIN' | 'CASHIER' | 'STAFF'
+  email?: string
+}
+
+export interface Attendance {
+  id: string
+  staffId: string
+  date: string // YYYY-MM-DD
+  checkInTime: Date | number
+  checkOutTime?: Date | number | null
+  moneyAdvance?: number
+}
+
+// Inventory
+export interface InventoryItem {
+  id: string
+  name: string
+  category: string
+  quantity: number
+  lowStockThreshold?: number
+}
+
+// Customer
+export interface Customer {
+  id: string
+  name: string
+  phone?: string
+  plates?: string[]
+  createdAt?: Date | number
 }
