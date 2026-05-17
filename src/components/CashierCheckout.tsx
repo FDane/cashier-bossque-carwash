@@ -10,17 +10,20 @@ import {
   Loader2,
   AlertCircle,
   Plus,
+  Camera,
   Minus,
   ShoppingBag,
   Edit,
   Trash2,
+  Image as ImageIcon,
 } from 'lucide-react'
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
-import { completeTransaction, updateDailyStats, deleteTransaction, updateTransaction } from '@/lib/firebaseService'
+import { completeTransaction, updateDailyStats, deleteTransaction, updateTransaction, uploadImageToFirebase } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency, formatTime } from '@/lib/utils'
 
+import { resizeImage } from '@/lib/imageUtils' // Import image utility
 interface CashierCheckoutProps {
   pendingTransactions: Transaction[]
   loading: boolean
@@ -67,6 +70,11 @@ export default function CashierCheckout({
   })
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [checkoutImagePreviewUrl, setCheckoutImagePreviewUrl] = useState<string | null>(null)
+
+  // State for viewing image in a modal
+  const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null)
+  const checkoutImageInputRef = React.useRef<HTMLInputElement>(null)
 
   // Local filtering: No extra Firebase cost
   const filteredTransactions = useMemo(() => {
@@ -151,10 +159,53 @@ export default function CashierCheckout({
     setEditingTransaction({ ...transaction })
   }
 
-  const handleDelete = async (id: string) => {
+  const handleCheckoutImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && checkoutModal.transaction) {
+      setProcessingId(checkoutModal.transaction.id)
+      try {
+        const compressedImageFile = await resizeImage(file)
+        const { imageUrl, imagePath } = await uploadImageToFirebase(
+          compressedImageFile,
+          checkoutModal.transaction.id,
+          checkoutModal.transaction.plateNumber,
+          checkoutModal.transaction.imagePath || undefined
+        )
+
+        await updateTransaction(checkoutModal.transaction.id, { imageUrl, imagePath })
+
+        setCheckoutModal((prev) =>
+          prev.transaction
+            ? {
+                ...prev,
+                transaction: {
+                  ...prev.transaction,
+                  imageUrl,
+                  imagePath,
+                },
+              }
+            : prev
+        )
+        setCheckoutImagePreviewUrl(URL.createObjectURL(compressedImageFile))
+        showToast.success('Image uploaded successfully')
+      } catch (error) {
+        console.error('Error uploading checkout image:', error)
+        showToast.error('Failed to upload image')
+      } finally {
+        setProcessingId(null)
+        if (checkoutImageInputRef.current) checkoutImageInputRef.current.value = ''
+      }
+    }
+  }
+
+  const triggerCheckoutImageCapture = () => {
+    checkoutImageInputRef.current?.click()
+  }
+
+  const handleDelete = async (id: string, imagePath?: string | null) => {
     if (window.confirm(t('cashier.confirmDelete' as any) || 'Are you sure you want to remove this car?')) {
       try {
-        await deleteTransaction(id)
+        await deleteTransaction(id, imagePath ?? undefined)
         showToast.success(t('cashier.deleteSuccess' as any) || 'Car removed from queue')
       } catch (error) {
         showToast.error('Error removing car')
@@ -312,12 +363,21 @@ export default function CashierCheckout({
                       <Edit className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => handleDelete(transaction.id)}
+                      onClick={() => handleDelete(transaction.id, transaction.imagePath)}
                       className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
                       title="Remove car"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
+                    {transaction.imageUrl && (
+                      <button
+                        onClick={() => setViewingImageUrl(transaction.imageUrl || null)}
+                        className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                        title="View car photo"
+                      >
+                        <ImageIcon className="w-4 h-4" />
+                      </button>
+                    )}
                     <ChevronRight className="w-5 h-5 text-zinc-600" />
                   </div>
                 </div>
@@ -417,6 +477,50 @@ export default function CashierCheckout({
                       {checkoutModal.transaction.brand} {checkoutModal.transaction.model} • {t(`color.${checkoutModal.transaction.color}` as any)}
                     </div>
                   </div>
+
+                  <div className="mt-4 rounded-3xl border border-zinc-200 dark:border-zinc-700 p-4 bg-zinc-50 dark:bg-zinc-900/50">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
+                          {t('payment.vehiclePhoto' as any) || 'Vehicle Photo (optional)'}
+                        </div>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                          {t('payment.vehiclePhotoNote' as any) || 'Upload or update the vehicle photo if available.'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={triggerCheckoutImageCapture}
+                        className="inline-flex items-center gap-2 rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition"
+                      >
+                        <Camera className="w-4 h-4" />
+                        {checkoutModal.transaction.imageUrl ? (t('payment.changePhoto' as any) || 'Change Photo') : (t('payment.uploadPhoto' as any) || 'Upload Photo')}
+                      </button>
+                    </div>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      ref={checkoutImageInputRef}
+                      onChange={handleCheckoutImageCapture}
+                      className="hidden"
+                    />
+                    {checkoutModal.transaction.imageUrl && (
+                      <button
+                        type="button"
+                        onClick={() => setViewingImageUrl(checkoutModal.transaction?.imageUrl || null)}
+                        className="mt-3 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                      >
+                        {t('payment.viewUploadedPhoto' as any) || 'View uploaded photo'}
+                      </button>
+                    )}
+                    {checkoutImagePreviewUrl && !checkoutModal.transaction.imageUrl && (
+                      <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                        {t('payment.photoSelectedNote' as any) || 'A new photo is ready to upload.'}
+                      </p>
+                    )}
+                  </div>
+
                   <div className="border-t border-zinc-700 pt-3">
                     <div className="text-sm text-zinc-500 uppercase font-bold mb-1">
                       {t('payment.totalAmount' as any)}
@@ -683,6 +787,26 @@ export default function CashierCheckout({
               >
                 Save Changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Image Viewer Modal */}
+      {viewingImageUrl && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">Vehicle Photo</h3>
+              <button
+                onClick={() => setViewingImageUrl(null)}
+                className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            <div className="p-4">
+              <img src={viewingImageUrl} alt="Vehicle Photo" className="w-full h-auto rounded-xl" />
             </div>
           </div>
         </div>

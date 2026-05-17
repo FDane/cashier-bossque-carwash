@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useMemo } from 'react'
+import React, { useState } from 'react'
 import { 
   UserPlus, 
   Search, 
@@ -9,7 +9,6 @@ import {
   Car, 
   Loader2,
   ArrowRight,
-  CreditCard,
   UserCircle,
   Plus
 } from 'lucide-react'
@@ -20,7 +19,7 @@ import {
 } from '@/lib/firebaseService'
 import { useLanguage } from '@/hooks/useLanguage'
 import { showToast } from '@/lib/toast'
-import { formatCurrency, formatTime } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
 
 export default function CustomerSection() {
   const { t } = useLanguage()

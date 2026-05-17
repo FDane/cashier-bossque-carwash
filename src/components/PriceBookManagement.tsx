@@ -4,16 +4,12 @@ import {
   Tag, 
   Plus, 
   Search, 
-  Edit, 
   Trash2, 
   Loader2, 
-  Car, 
-  DollarSign 
 } from 'lucide-react'
 import { 
   listenToFullPriceBook, 
   addPriceBookItem, 
-  updatePriceBookItem, 
   deletePriceBookItem 
 } from '@/lib/firebaseService'
 import { useLanguage } from '@/hooks/useLanguage'

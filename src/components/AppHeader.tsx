@@ -12,8 +12,7 @@ import {
   Users, 
   Box, 
   History, 
-  UserCircle,
-  Tag
+  UserCircle
 } from 'lucide-react'
 import ThemeSwitcher from '@/components/ThemeSwitcher'
 import { useLanguage } from '@/hooks/useLanguage'

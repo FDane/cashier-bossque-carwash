@@ -24,6 +24,8 @@ export interface Transaction {
   paidTime: Date | number | null
   notes?: string
   addons?: string[]
+  imageUrl?: string | null
+  imagePath?: string | null
 }
 
 export interface PriceBook {

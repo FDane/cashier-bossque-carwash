@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
   Plus,
-  Loader2,
+  Loader2, X, Camera,
   Check,
   Car,
   Sparkles,
@@ -13,7 +13,7 @@ import {
 } from 'lucide-react'
 import { CarService, IntakeFormData } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
-import { createTransaction, listenToFullPriceBook } from '@/lib/firebaseService'
+import { createTransaction, listenToFullPriceBook, uploadImageToFirebase, updateTransaction } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency } from '@/lib/utils'
 
@@ -44,6 +44,9 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
   const { t, language } = useLanguage()
   const [loading, setLoading] = useState(false)
   const [priceBook, setPriceBook] = useState<any[]>([])
+  const [imageFile, setImageFile] = useState<File | null>(null) // New state for image file
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null) // New state for image preview
+  const fileInputRef = React.useRef<HTMLInputElement>(null) // Ref for hidden file input
   const [formData, setFormData] = useState<IntakeFormData>({
     plateNumber: '',
     brand: '',
@@ -55,6 +58,21 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     },
   })
 
+  // New function to handle image capture
+  const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Create a preview URL
+      setImagePreviewUrl(URL.createObjectURL(file))
+      // Store the file for later processing (e.g., resizing and upload)
+      setImageFile(file)
+    } else {
+      setImagePreviewUrl(null)
+      setImageFile(null)
+    }
+  }
+
+  // New function to trigger file input click
   const [selectedModels, setSelectedModels] = useState<string[]>([])
 
   // Load Price Book from Firebase
@@ -153,6 +171,10 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     })
   }
 
+  const triggerImageCapture = () => {
+    fileInputRef.current?.click()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -175,6 +197,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     setLoading(true)
 
     try {
+      // Create the transaction first to get an ID
       const transactionId = await createTransaction(
         formData.plateNumber,
         formData.brand,
@@ -183,6 +206,20 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
         formData.services,
         estimatedPrice
       )
+
+      if (imageFile) {
+        try {
+          const { imageUrl, imagePath } = await uploadImageToFirebase(
+            imageFile,
+            transactionId,
+            formData.plateNumber
+          )
+          await updateTransaction(transactionId, { imageUrl, imagePath })
+        } catch (uploadError) {
+          console.error('Error uploading transaction image:', uploadError)
+          showToast.warning('Transaction created, but image upload failed')
+        }
+      }
 
       showToast.success(t('intake.success' as any))
 
@@ -197,6 +234,8 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           engine: false,
         },
       })
+      setImageFile(null)
+      setImagePreviewUrl(null)
 
       onTransactionAdded?.({
         id: transactionId,
@@ -366,6 +405,42 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
               )
             })}
           </div>
+        </div>
+
+        {/* Image Capture Section */}
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
+            {t('intake.image' as any)}
+          </label>
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment" // Forces camera on mobile
+            ref={fileInputRef}
+            onChange={handleImageCapture}
+            style={{ display: 'none' }}
+          />
+          <button
+            type="button"
+            onClick={triggerImageCapture}
+            className="w-full flex items-center justify-center gap-2 p-4 bg-zinc-100 dark:bg-zinc-800/50 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-2xl text-zinc-500 hover:border-blue-500 hover:text-blue-500 transition-all"
+          >
+            <Camera className="w-5 h-5" />
+            <span>{imagePreviewUrl ? t('intake.changePhoto' as any) : t('intake.uploadPhoto' as any)}</span>
+          </button>
+          {imagePreviewUrl && (
+            <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
+              <img src={imagePreviewUrl} alt="Vehicle Preview" className="w-full h-full object-cover" />
+              <button
+                type="button"
+                onClick={() => { setImageFile(null); setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} // Clear file input
+                className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
+                title="Remove Photo"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Estimated Price Display */}

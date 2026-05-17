@@ -15,6 +15,7 @@ import {
   deleteDoc,
 } from 'firebase/firestore'
 import { db } from './firebase'
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import {
   Transaction,
   TransactionStatus,
@@ -26,6 +27,46 @@ import {
 const TRANSACTIONS_COLLECTION = 'transactions'
 const DAILY_STATS_COLLECTION = 'daily_stats'
 const PRICE_BOOK_COLLECTION = 'price_book'
+const storage = getStorage()
+
+function normalizeStorageFileName(value: string) {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '_')
+}
+
+function getTransactionImagePath(transactionId: string, plateNumber: string) {
+  return `transaction_images/${transactionId}_${normalizeStorageFileName(plateNumber)}`
+}
+
+export async function uploadImageToFirebase(
+  file: File,
+  transactionId: string,
+  plateNumber: string,
+  previousImagePath?: string
+): Promise<{ imageUrl: string; imagePath: string }> {
+  const imagePath = getTransactionImagePath(transactionId, plateNumber)
+
+  if (previousImagePath && previousImagePath !== imagePath) {
+    try {
+      await deleteObject(storageRef(storage, previousImagePath))
+    } catch (error) {
+      // ignore missing or already deleted object
+    }
+  }
+
+  const uploadRef = storageRef(storage, imagePath)
+  await uploadBytes(uploadRef, file, { contentType: file.type })
+  const imageUrl = await getDownloadURL(uploadRef)
+
+  return { imageUrl, imagePath }
+}
+
+export async function deleteTransactionImage(imagePath: string): Promise<void> {
+  try {
+    await deleteObject(storageRef(storage, imagePath))
+  } catch (error) {
+    // ignore if image already deleted or path does not exist
+  }
+}
 
 /**
  * Add a new transaction (car entry)
@@ -36,9 +77,11 @@ export async function createTransaction(
   model: string,
   color: string,
   services: CarService,
-  computedPrice: number
+  computedPrice: number,
+  imageUrl?: string,
+  imagePath?: string
 ): Promise<string> {
-  const transactionData = {
+  const transactionData: any = {
     plateNumber: plateNumber.toUpperCase(),
     brand,
     model,
@@ -53,6 +96,9 @@ export async function createTransaction(
     paidTime: null,
     notes: '',
   }
+
+  if (imageUrl) transactionData.imageUrl = imageUrl
+  if (imagePath) transactionData.imagePath = imagePath
 
   const docRef = await addDoc(collection(db, TRANSACTIONS_COLLECTION), transactionData)
   return docRef.id
@@ -84,8 +130,17 @@ export async function completeTransaction(
 /**
  * Delete a transaction (remove from queue)
  */
-export async function deleteTransaction(transactionId: string): Promise<void> {
+export async function deleteTransaction(transactionId: string, imagePath?: string | null): Promise<void> {
   const transactionRef = doc(db, TRANSACTIONS_COLLECTION, transactionId)
+  const transactionSnapshot = await getDoc(transactionRef)
+
+  const pathToDelete =
+    imagePath || (transactionSnapshot.exists() ? (transactionSnapshot.data().imagePath as string | undefined) : undefined)
+
+  if (pathToDelete) {
+    await deleteTransactionImage(pathToDelete)
+  }
+
   await deleteDoc(transactionRef)
 }
 
@@ -132,6 +187,8 @@ export function listenToTransactions(
         paidTime: data.paidTime?.toDate?.() || data.paidTime,
         notes: data.notes || '',
         addons: data.addons || [],
+        imageUrl: data.imageUrl || null,
+        imagePath: data.imagePath || null,
       })
     })
     callback(transactions)

@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useMemo } from 'react'
+import React, { useState} from 'react'
 import { 
   getTransactionsByPlate 
 } from '@/lib/firebaseService'
@@ -9,9 +9,7 @@ import {
   Search, 
   Car, 
   Loader2, 
-  ArrowRight,
   Calendar,
-  CreditCard,
   Clock
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'

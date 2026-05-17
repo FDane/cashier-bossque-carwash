@@ -6,10 +6,7 @@ import {
   LogOut, 
   Plus, 
   Clock, 
-  DollarSign, 
   CheckCircle2,
-  UserCheck,
-  ChevronRight
 } from 'lucide-react'
 import {
   listenToTodayAttendance,
