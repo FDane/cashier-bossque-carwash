@@ -1,7 +1,7 @@
 "use client"
-import React, { useState} from 'react'
+import React, { useState, useEffect } from 'react'
 import { 
-  getTransactionsByPlate 
+  getPastTransactions 
 } from '@/lib/firebaseService'
 import { useLanguage } from '@/hooks/useLanguage'
 import { 
@@ -10,7 +10,9 @@ import {
   Car, 
   Loader2, 
   Calendar,
-  Clock
+  Clock,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
@@ -19,13 +21,35 @@ export default function PastCarSearch() {
   const [plate, setPlate] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
+  const [viewLimit, setViewLimit] = useState(10)
+  const [firstDoc, setFirstDoc] = useState<any>(null)
+  const [lastDoc, setLastDoc] = useState<any>(null)
+  const [currentPage, setCurrentPage] = useState(1)
 
-  async function handleSearch() {
-    if (!plate) return
+  useEffect(() => {
+    handleSearch()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewLimit])
+
+  async function handleSearch(direction?: 'next' | 'prev') {
     setLoading(true)
     try {
-    const rows = await getTransactionsByPlate(plate)
-    setResults(rows)
+      const snapshot = await getPastTransactions(
+        viewLimit, 
+        plate || undefined,
+        direction === 'next' ? lastDoc : undefined,
+        direction === 'prev' ? firstDoc : undefined
+      )
+
+      
+      const rows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
+      setResults(rows)
+      setFirstDoc(snapshot.docs[0])
+      setLastDoc(snapshot.docs[snapshot.docs.length - 1])
+
+      if (direction === 'next') setCurrentPage(p => p + 1)
+      else if (direction === 'prev') setCurrentPage(p => Math.max(1, p - 1))
+      else setCurrentPage(1)
     } finally {
       setLoading(false)
     }
@@ -58,7 +82,7 @@ export default function PastCarSearch() {
           </div>
           <button 
             className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-3 disabled:opacity-50"
-            onClick={handleSearch}
+            onClick={() => handleSearch()}
             disabled={loading}
           >
             {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Search className="w-6 h-6" />}
@@ -81,8 +105,8 @@ export default function PastCarSearch() {
                 <tr>
                   <th className="text-left px-8 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('intake.plateNumber' as any)}</th>
                   <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('intake.services' as any)}</th>
-                  <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('payment.totalAmount' as any)}</th>
-                  <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">Status</th>
+                  <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('payment.amountReceived' as any)}</th>
+                  <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('payment.paymentMethod' as any)}</th>
                   <th className="text-left px-8 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.checkIn' as any)}</th>
                 </tr>
               </thead>
@@ -94,10 +118,12 @@ export default function PastCarSearch() {
                     </td>
                     <td className="py-5 px-4">
                       <div className="flex flex-wrap gap-1.5">
-                        {Object.entries(r.services || {}).filter(([,v])=>v).map(([k])=>(
-                          <span key={k} className="px-2.5 py-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase rounded-lg border border-blue-500/10">
-                            {t(`intake.services.${k}` as any)}
-                          </span>
+                        {['exterior', 'interior', 'engine'].map((serviceKey) => (
+                          r.services?.[serviceKey] && (
+                            <span key={serviceKey} className="px-2.5 py-1 bg-blue-500/10 text-blue-600 dark:text-blue-400 text-[10px] font-black uppercase rounded-lg border border-blue-500/10">
+                              {t(`intake.services.${serviceKey}` as any)}
+                            </span>
+                          )
                         ))}
                       </div>
                     </td>
@@ -105,11 +131,13 @@ export default function PastCarSearch() {
                       {formatCurrency(r.computedPrice)}
                     </td>
                     <td className="py-5 px-4">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                        r.status === 'COMPLETED' ? 'bg-green-500/10 text-green-600' : 'bg-amber-500/10 text-amber-600'
-                      }`}>
-                        {r.status}
-                      </span>
+                      {r.paymentMethod && (
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                          r.paymentMethod === 'CASH' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-indigo-500/10 text-indigo-600'
+                        }`}>
+                          {r.paymentMethod}
+                        </span>
+                      )}
                     </td>
                     <td className="py-5 px-8 rounded-r-2xl text-sm text-zinc-500 font-medium">
                       <div className="flex flex-col">
@@ -127,6 +155,42 @@ export default function PastCarSearch() {
                 ))}
               </tbody>
             </table>
+
+            {/* Pagination Footer */}
+            <div className="p-6 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-zinc-500 font-medium">{t('common.itemsPerPage' as any) || 'Items per page:'}</span>
+                <select
+                  value={viewLimit}
+                  onChange={(e) => setViewLimit(parseInt(e.target.value))}
+                  className="bg-zinc-100 dark:bg-zinc-800 border-none rounded-lg px-3 py-1 text-sm font-bold text-zinc-900 dark:text-white outline-none focus:ring-2 focus:ring-blue-500/50 cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+              
+              <div className="flex items-center gap-4">
+                <button
+                  onClick={() => handleSearch('prev')}
+                  disabled={loading || currentPage === 1}
+                  className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 disabled:opacity-30 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-sm font-bold text-zinc-900 dark:text-white">
+                  {t('common.page' as any) || 'Page'} {currentPage}
+                </span>
+                <button
+                  onClick={() => handleSearch('next')}
+                  disabled={loading || results.length < viewLimit}
+                  className="p-2 rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 disabled:opacity-30 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

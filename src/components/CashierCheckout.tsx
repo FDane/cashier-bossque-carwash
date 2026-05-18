@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   Search,
   CreditCard,
@@ -19,7 +19,14 @@ import {
 } from 'lucide-react'
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
-import { completeTransaction, updateDailyStats, deleteTransaction, updateTransaction, uploadImageToFirebase } from '@/lib/firebaseService'
+import { 
+  completeTransaction, 
+  updateDailyStats, 
+  deleteTransaction, 
+  updateTransaction, 
+  uploadImageToFirebase,
+  listenToFullPriceBook
+} from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency, formatTime } from '@/lib/utils'
 
@@ -54,6 +61,8 @@ interface CheckoutModalData {
   paymentMethod: PaymentMethod
   cashReceived: number
   selectedAddons: SelectedAddon[]
+  cashDenominations: Record<number, number>
+  changeDenominations: Record<number, number>
 }
 
 export default function CashierCheckout({
@@ -62,11 +71,14 @@ export default function CashierCheckout({
 }: CashierCheckoutProps) {
   const { t, language } = useLanguage()
   const [searchQuery, setSearchQuery] = useState('')
+  const [priceBook, setPriceBook] = useState<any[]>([])
   const [checkoutModal, setCheckoutModal] = useState<CheckoutModalData>({
     transaction: null,
     paymentMethod: null,
     cashReceived: 0,
     selectedAddons: [],
+    cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+    changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
   })
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
@@ -76,6 +88,13 @@ export default function CashierCheckout({
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null)
   const checkoutImageInputRef = React.useRef<HTMLInputElement>(null)
 
+  useEffect(() => {
+    const unsub = listenToFullPriceBook((items) => {
+      setPriceBook(items)
+    })
+    return () => unsub()
+  }, [])
+
   // Local filtering: No extra Firebase cost
   const filteredTransactions = useMemo(() => {
     if (!searchQuery.trim()) return pendingTransactions
@@ -83,7 +102,7 @@ export default function CashierCheckout({
     return pendingTransactions.filter((t) =>
       t.plateNumber.toLowerCase().includes(query)
     )
-  }, [pendingTransactions, searchQuery, language])
+  }, [pendingTransactions, searchQuery])
 
   // Calculate total with addons
   const totalWithAddons = useMemo(() => {
@@ -101,7 +120,12 @@ export default function CashierCheckout({
       return 0
     }
     return checkoutModal.cashReceived - totalWithAddons
-  }, [totalWithAddons, checkoutModal.paymentMethod, checkoutModal.cashReceived])
+  }, [
+    checkoutModal.transaction,
+    checkoutModal.paymentMethod,
+    checkoutModal.cashReceived,
+    totalWithAddons,
+  ])
 
   const handleCardClick = (transaction: Transaction) => {
     setCheckoutModal({
@@ -109,6 +133,8 @@ export default function CashierCheckout({
       paymentMethod: null,
       cashReceived: 0,
       selectedAddons: [],
+      cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+      changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
     })
   }
 
@@ -117,6 +143,8 @@ export default function CashierCheckout({
       ...checkoutModal,
       paymentMethod: method,
       cashReceived: 0,
+      cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+      changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
     })
   }
 
@@ -187,10 +215,10 @@ export default function CashierCheckout({
             : prev
         )
         setCheckoutImagePreviewUrl(URL.createObjectURL(compressedImageFile))
-        showToast.success('Image uploaded successfully')
+        showToast.success(t('payment.imageUploadSuccess' as any) || 'Image uploaded successfully')
       } catch (error) {
         console.error('Error uploading checkout image:', error)
-        showToast.error('Failed to upload image')
+        showToast.error(t('payment.imageUploadError' as any) || 'Failed to upload image')
       } finally {
         setProcessingId(null)
         if (checkoutImageInputRef.current) checkoutImageInputRef.current.value = ''
@@ -208,9 +236,40 @@ export default function CashierCheckout({
         await deleteTransaction(id, imagePath ?? undefined)
         showToast.success(t('cashier.deleteSuccess' as any) || 'Car removed from queue')
       } catch {
-        showToast.error('Error removing car')
+        showToast.error(t('common.error' as any) || 'Error removing car')
       }
     }
+  }
+
+  const calculatePrice = (brand: string, model: string, services: any) => {
+    const selectedModelData = priceBook.find(
+      it => it.brand === brand && it.model === model
+    )
+
+    if (!selectedModelData) return 0
+
+    const { exterior, interior, engine } = services
+
+    if (!exterior && !interior && !engine) return 0
+
+    if (interior && !exterior && !engine) {
+      return selectedModelData.vaccuum_price || 0
+    }
+
+    let total = 0
+    if (exterior && interior) {
+      total = selectedModelData.interior_price || 0
+    } else if (exterior && !interior) {
+      total = selectedModelData.exterior_price || 0
+    } else if (!exterior && interior) {
+      total = selectedModelData.vaccuum_price || 0
+    }
+
+    if (engine) {
+      total += selectedModelData.engine_price || 0
+    }
+
+    return total
   }
 
   const handleUpdate = async () => {
@@ -220,7 +279,7 @@ export default function CashierCheckout({
       showToast.success(t('cashier.updateSuccess' as any) || 'Car updated successfully')
       setEditingTransaction(null)
     } catch {
-      showToast.error('Error updating car')
+      showToast.error(t('common.error' as any) || 'Error updating car')
     }
   }
 
@@ -248,14 +307,18 @@ export default function CashierCheckout({
         checkoutModal.paymentMethod,
         checkoutModal.cashReceived,
         totalWithAddons,
-        checkoutModal.selectedAddons
+        checkoutModal.selectedAddons,
+        checkoutModal.cashDenominations,
+        checkoutModal.changeDenominations
       )
 
       // Update daily stats with revenue and car level
       await updateDailyStats(
         checkoutModal.paymentMethod,
         totalWithAddons,
-        pendingTransactions.length
+        pendingTransactions.length,
+        checkoutModal.cashDenominations,
+        checkoutModal.changeDenominations
       )
 
       showToast.success(t('payment.success' as any))
@@ -266,6 +329,8 @@ export default function CashierCheckout({
         paymentMethod: null,
         cashReceived: 0,
         selectedAddons: [],
+        cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+        changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
       })
     } catch (error) {
       console.error('Error processing checkout:', error)
@@ -281,8 +346,19 @@ export default function CashierCheckout({
       paymentMethod: null,
       cashReceived: 0,
       selectedAddons: [],
+      cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+      changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
     })
   }
+
+  const totalChangeValue = useMemo(() => {
+    return Object.entries(checkoutModal.changeDenominations).reduce(
+      (sum, [bill, count]) => sum + parseInt(bill) * count,
+      0
+    )
+  }, [checkoutModal.changeDenominations])
+
+  const isChangeIncomplete = balance > 0 && totalChangeValue !== balance
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -639,6 +715,49 @@ export default function CashierCheckout({
                     />
                   </div>
 
+                  {/* Quick Cash Buttons */}
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {[1, 5, 10, 20, 50, 100].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setCheckoutModal(prev => ({
+                          ...prev,
+                          cashReceived: (prev.cashReceived || 0) + amt,
+                          cashDenominations: {
+                            ...prev.cashDenominations,
+                            [amt]: (prev.cashDenominations[amt] || 0) + 1
+                          }
+                        }))}
+                        className="py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-300 font-bold hover:bg-zinc-700 hover:text-white active:scale-95 transition-all text-xs"
+                      >
+                        +RM{amt}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutModal(prev => ({ ...prev, cashReceived: totalWithAddons }))}
+                      className="flex-1 py-3 bg-blue-600/20 border border-blue-500/50 text-blue-400 rounded-xl font-bold hover:bg-blue-600/30 transition-all text-xs uppercase tracking-wider"
+                    >
+                      {t('payment.exactAmount' as any)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCheckoutModal(prev => ({ 
+                        ...prev, 
+                        cashReceived: 0,
+                        cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+                        changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }
+                      }))}
+                      className="px-6 py-3 bg-zinc-800 border border-zinc-700 text-zinc-500 rounded-xl font-bold hover:bg-zinc-700 transition-all text-xs uppercase tracking-wider"
+                    >
+                      {t('payment.clearCash' as any)}
+                    </button>
+                  </div>
+
                   {/* Balance Display */}
                   <div
                     className={`border-2 rounded-lg p-4 ${
@@ -670,6 +789,45 @@ export default function CashierCheckout({
                 </div>
               )}
 
+              {/* Change Denominations Selector - Only when balance exists */}
+              {checkoutModal.paymentMethod === 'CASH' && balance > 0 && (
+                <div className="space-y-4 bg-zinc-50 dark:bg-zinc-800/30 border border-zinc-200 dark:border-zinc-700 rounded-2xl p-4">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-black text-zinc-500 uppercase tracking-widest">
+                      {t('payment.changeBills' as any)}
+                    </label>
+                    <span className={`text-xs font-black px-2 py-0.5 rounded ${isChangeIncomplete ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>
+                      {formatCurrency(totalChangeValue)} / {formatCurrency(balance)}
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                    {[1, 5, 10, 20, 50, 100].map((amt) => {
+                      const count = checkoutModal.changeDenominations[amt] || 0
+                      return (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setCheckoutModal(prev => ({
+                            ...prev,
+                            changeDenominations: {
+                              ...prev.changeDenominations,
+                              [amt]: (prev.changeDenominations[amt] || 0) + 1
+                            }
+                          }))}
+                          className={`relative py-2.5 rounded-xl border font-bold transition-all text-xs ${
+                            count > 0 ? 'bg-blue-600 border-blue-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500'
+                          }`}
+                        >
+                          RM{amt}
+                          {count > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-[10px] rounded-full flex items-center justify-center border border-white dark:border-zinc-900">{count}</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
               {/* QR Display - For Online Payment */}
               {checkoutModal.paymentMethod === 'ONLINE' && (
                 <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-6 text-center">
@@ -691,7 +849,8 @@ export default function CashierCheckout({
                 disabled={
                   processingId !== null ||
                   !checkoutModal.paymentMethod ||
-                  (checkoutModal.paymentMethod === 'CASH' && balance < 0)
+                  (checkoutModal.paymentMethod === 'CASH' && balance < 0) ||
+                  isChangeIncomplete
                 }
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white font-bold py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-xl shadow-lg shadow-green-500/20"
               >
@@ -708,7 +867,7 @@ export default function CashierCheckout({
         <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">Edit Car Details</h3>
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{t('cashier.editTitle' as any) || 'Edit Car Details'}</h3>
               <button
                 onClick={() => setEditingTransaction(null)}
                 className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
@@ -720,7 +879,7 @@ export default function CashierCheckout({
             <div className="p-6 space-y-6">
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">Plate Number</label>
+                  <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">{t('intake.plateNumber' as any)}</label>
                   <input
                     type="text"
                     className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-lg font-mono font-bold uppercase"
@@ -731,35 +890,72 @@ export default function CashierCheckout({
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">Brand</label>
-                    <input
-                      type="text"
-                      className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3"
+                    <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">{t('intake.brand' as any)}</label>
+                    <select
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold appearance-none cursor-pointer"
                       value={editingTransaction.brand}
-                      onChange={(e) => setEditingTransaction({...editingTransaction, brand: e.target.value})}
-                    />
+                      onChange={(e) => {
+                        const brand = e.target.value
+                        const modelsForBrand = priceBook.filter(it => it.brand === brand)
+                        const firstModel = modelsForBrand[0]?.model || ''
+                        const newPrice = calculatePrice(brand, firstModel, editingTransaction.services)
+                        setEditingTransaction({
+                          ...editingTransaction,
+                          brand,
+                          model: firstModel,
+                          computedPrice: newPrice
+                        })
+                      }}
+                    >
+                      <option value="">{t('intake.brand.placeholder' as any)}</option>
+                      {Array.from(new Set(priceBook.map(it => it.brand))).sort().map(b => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">Model</label>
-                    <input
-                      type="text"
-                      className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3"
+                    <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">{t('intake.model' as any)}</label>
+                    <select
+                      className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold appearance-none cursor-pointer"
                       value={editingTransaction.model}
-                      onChange={(e) => setEditingTransaction({...editingTransaction, model: e.target.value})}
-                    />
+                      onChange={(e) => {
+                        const model = e.target.value
+                        const newPrice = calculatePrice(editingTransaction.brand, model, editingTransaction.services)
+                        setEditingTransaction({
+                          ...editingTransaction,
+                          model,
+                          computedPrice: newPrice
+                        })
+                      }}
+                    >
+                      <option value="">{t('intake.model.placeholder' as any)}</option>
+                      {priceBook
+                        .filter(it => it.brand === editingTransaction.brand)
+                        .map(it => it.model)
+                        .sort()
+                        .map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))
+                      }
+                    </select>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-semibold text-zinc-500 mb-2 uppercase tracking-wider">Services</label>
+                  <label className="block text-sm font-semibold text-zinc-500 mb-2 uppercase tracking-wider">{t('intake.services' as any)}</label>
                   <div className="flex flex-wrap gap-3">
                     {(['exterior', 'interior', 'engine'] as const).map((s) => (
                       <button
                         key={s}
-                        onClick={() => setEditingTransaction({
-                          ...editingTransaction,
-                          services: { ...editingTransaction.services, [s]: !editingTransaction.services[s] }
-                        })}
+                        onClick={() => {
+                          const newServices = { ...editingTransaction.services, [s]: !editingTransaction.services[s] }
+                          const newPrice = calculatePrice(editingTransaction.brand, editingTransaction.model, newServices)
+                          setEditingTransaction({
+                            ...editingTransaction,
+                            services: newServices,
+                            computedPrice: newPrice
+                          })
+                        }}
                         className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${
                           editingTransaction.services[s]
                             ? 'bg-blue-600 border-blue-500 text-white'
@@ -771,6 +967,15 @@ export default function CashierCheckout({
                     ))}
                   </div>
                 </div>
+
+                <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-semibold text-zinc-500 uppercase tracking-widest">{t('payment.totalAmount' as any)}</span>
+                    <span className="text-2xl font-black text-blue-600 dark:text-blue-400">
+                      {formatCurrency(editingTransaction.computedPrice)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -779,13 +984,13 @@ export default function CashierCheckout({
                 onClick={() => setEditingTransaction(null)}
                 className="flex-1 py-4 text-zinc-600 dark:text-zinc-400 font-bold hover:text-zinc-900 dark:hover:text-white transition-colors"
               >
-                Cancel
+                {t('common.cancel' as any) || 'Cancel'}
               </button>
               <button
                 onClick={handleUpdate}
                 className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg shadow-blue-500/20"
               >
-                Save Changes
+                {t('common.save' as any) || 'Save Changes'}
               </button>
             </div>
           </div>
@@ -797,7 +1002,7 @@ export default function CashierCheckout({
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">Vehicle Photo</h3>
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{t('intake.image' as any)}</h3>
               <button
                 onClick={() => setViewingImageUrl(null)}
                 className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"

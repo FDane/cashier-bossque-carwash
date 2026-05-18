@@ -1,15 +1,25 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useMemo, useState, useEffect } from 'react'
 import CarEntryIntake from '@/components/CarEntryIntake'
 import CashierCheckout from '@/components/CashierCheckout'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useLanguage } from '@/hooks/useLanguage'
-import { ChevronDown, ChevronUp, Wallet } from 'lucide-react'
+import { ChevronDown, ChevronUp, Wallet, Banknote, Plus, Minus, X, Trash2 } from 'lucide-react'
+import { listenToTodayAdjustments, addCashAdjustment, deleteCashAdjustment } from '@/lib/firebaseService'
+import { showToast } from '@/lib/toast'
+import { formatCurrency } from '@/lib/utils'
 
 export default function Dashboard() {
   const { t } = useLanguage()
   const [isCheckoutExpanded, setIsCheckoutExpanded] = useState(false)
+  const [adjustments, setAdjustments] = useState<any[]>([])
+  const [showAdjModal, setShowAdjModal] = useState<'EXPENSE' | 'ADDITION' | null>(null)
+  const [adjForm, setAdjForm] = useState({ 
+    amount: '', 
+    reason: '',
+    denominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } as Record<number, number>
+  })
 
   // Listen to PENDING transactions (intake queue)
   const {
@@ -20,10 +30,110 @@ export default function Dashboard() {
   // Listen to COMPLETED transactions (past records)
   const { transactions: completedTransactions } = useTransactions('COMPLETED')
 
-      {/* Header is provided by AppHeader in layout */}
-      return (
-    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-950 dark:text-white transition-colors duration-200">
+  useEffect(() => {
+    const unsub = listenToTodayAdjustments(setAdjustments)
+    return () => unsub()
+  }, [])
 
+  // Filter transactions to only include those completed today
+  const todayCompleted = useMemo(() => {
+    const todayStr = new Date().toDateString()
+    return completedTransactions.filter(trans => {
+      if (!trans.paidTime) return false
+      // paidTime is converted to a Date object in our firebaseService listener
+      const paidDate = trans.paidTime instanceof Date ? trans.paidTime : new Date(trans.paidTime)
+      return paidDate.toDateString() === todayStr
+    })
+  }, [completedTransactions])
+
+  // Aggregated Cash Breakdown
+  const cashBreakdown = useMemo(() => {
+    const breakdown: Record<number, number> = { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }
+    let totalCashValue = 0
+
+    todayCompleted.forEach(trans => {
+      const denominations = (trans as any).denominations
+      const changeDenominations = (trans as any).changeDenominations
+      if (trans.paymentMethod === 'CASH' && denominations) {
+        Object.entries(denominations).forEach(([bill, count]) => {
+          const b = parseInt(bill)
+          const c = count as number
+          breakdown[b] = (breakdown[b] || 0) + c
+          totalCashValue += (b * c)
+        })
+      }
+      if (trans.paymentMethod === 'CASH' && changeDenominations) {
+        Object.entries(changeDenominations).forEach(([bill, count]) => {
+          const b = parseInt(bill)
+          const c = count as number
+          breakdown[b] = (breakdown[b] || 0) - c
+          totalCashValue -= (b * c)
+        })
+      }
+    })
+
+    let totalAdditions = 0
+    let totalExpenses = 0
+    adjustments.forEach(adj => {
+      const denominations = adj.denominations
+      if (denominations) {
+        Object.entries(denominations).forEach(([bill, count]) => {
+          const b = parseInt(bill)
+          const c = count as number
+          if (adj.type === 'ADDITION') {
+            breakdown[b] = (breakdown[b] || 0) + c
+          } else {
+            breakdown[b] = (breakdown[b] || 0) - c
+          }
+        })
+      }
+
+      if (adj.type === 'ADDITION') totalAdditions += adj.amount
+      else totalExpenses += adj.amount
+    })
+
+    const grandTotal = totalCashValue + totalAdditions - totalExpenses
+
+    return { breakdown, totalCashValue, totalAdditions, totalExpenses, grandTotal }
+  }, [todayCompleted, adjustments])
+
+  const handleAdjBillClick = (bill: number) => {
+    setAdjForm(prev => {
+      const newDenoms = { ...prev.denominations, [bill]: (prev.denominations[bill] || 0) + 1 }
+      const newAmount = Object.entries(newDenoms).reduce((sum, [b, c]) => sum + (parseInt(b) * c), 0)
+      return {
+        ...prev,
+        denominations: newDenoms,
+        amount: newAmount.toString()
+      }
+    })
+  }
+
+  const handleAddAdjustment = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!showAdjModal || !adjForm.amount || !adjForm.reason) return
+
+    try {
+      await addCashAdjustment(
+        showAdjModal, 
+        parseFloat(adjForm.amount), 
+        adjForm.reason, 
+        adjForm.denominations
+      )
+      showToast.success(t('common.success' as any))
+      setShowAdjModal(null)
+      setAdjForm({ 
+        amount: '', 
+        reason: '', 
+        denominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } 
+      })
+    } catch {
+      showToast.error(t('common.error' as any))
+    }
+  }
+
+  return (
+    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-950 dark:text-white transition-colors duration-200">
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* Two-Phase Layout */}
@@ -67,54 +177,238 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Stats Row - Optional */}
-        <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-4">
-          {[
-            { label: (t('stats.totalQueue' as any)), value: pendingTransactions.length, bgColor: 'bg-blue-50 dark:bg-blue-900/20', borderColor: 'border-blue-200 dark:border-blue-700/50', textColor: 'text-blue-600 dark:text-blue-400' },
-            {
-              label: (t('stats.completedToday' as any)),
-              value: completedTransactions.length,
-              bgColor: 'bg-green-50 dark:bg-green-900/20',
-              borderColor: 'border-green-200 dark:border-green-700/50',
-              textColor: 'text-green-600 dark:text-green-400',
-            },
-            {
-              label: (t('stats.totalRevenue' as any)),
-              value: `RM ${(
-                completedTransactions.reduce((sum, t) => sum + t.computedPrice, 0)
-              ).toFixed(2)}`,
-              bgColor: 'bg-amber-50 dark:bg-amber-900/20',
-              borderColor: 'border-amber-200 dark:border-amber-700/50',
-              textColor: 'text-amber-600 dark:text-amber-400',
-            },
-            {
-              label: (t('stats.avgPerCar' as any)),
-              value:
-                completedTransactions.length > 0
-                  ? `RM ${(
-                      completedTransactions.reduce((sum, t) => sum + t.computedPrice, 0) /
-                      completedTransactions.length
-                    ).toFixed(2)}`
-                  : 'N/A',
-              bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
-              borderColor: 'border-indigo-200 dark:border-indigo-700/50',
-              textColor: 'text-indigo-600 dark:text-indigo-400',
-            },
-          ].map((stat, idx) => (
-            <div
-              key={idx}
-              className={`${stat.bgColor} border ${stat.borderColor} rounded-lg p-4 transition-colors duration-200`}
-            >
-              <div className="text-xs text-gray-600 dark:text-gray-400 uppercase font-semibold mb-1">
-                {stat.label}
+        {/* Cashier Box Breakdown */}
+        <div className="mt-12">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-emerald-500/10 rounded-lg">
+              <Banknote className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+            </div>
+            <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
+                  {t('stats.cashDrawer' as any)}
+                </h3>
+                <div className="flex items-center gap-4">
+                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                    {t('stats.cashDrawer.total' as any)}: <span className="text-emerald-600 dark:text-emerald-400">RM {cashBreakdown.grandTotal.toFixed(2)}</span>
+                  </p>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setShowAdjModal('ADDITION')}
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> {t('stats.addCash' as any)}
+                    </button>
+                    <button 
+                      onClick={() => setShowAdjModal('EXPENSE')}
+                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider shadow-lg shadow-red-500/20 active:scale-95"
+                    >
+                      <Minus className="w-3.5 h-3.5" /> {t('stats.addExpense' as any)}
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div className={`text-2xl font-bold ${stat.textColor}`}>
-                {stat.value}
+              
+              {/* Detailed Breakdown Tags */}
+              <div className="flex flex-wrap gap-2">
+                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tighter">
+                    {t('stats.salesCash' as any)}: 
+                    <span className="ml-1 text-zinc-900 dark:text-white">{formatCurrency(cashBreakdown.totalCashValue)}</span>
+                  </span>
+                </div>
+                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tighter">
+                    {t('stats.totalAdditions' as any)}: 
+                    <span className="ml-1 text-indigo-600 dark:text-indigo-400">+{formatCurrency(cashBreakdown.totalAdditions)}</span>
+                  </span>
+                </div>
+                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tighter">
+                    {t('stats.totalExpenses' as any)}: 
+                    <span className="ml-1 text-red-600 dark:text-red-400">-{formatCurrency(cashBreakdown.totalExpenses)}</span>
+                  </span>
+                </div>
               </div>
             </div>
-          ))}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Bill Grid */}
+            <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {[1, 5, 10, 20, 50, 100].map((bill) => {
+                const count = cashBreakdown.breakdown[bill] || 0
+                const colors: Record<number, string> = {
+                  1: 'from-blue-500/20 to-blue-600/5 text-blue-600',
+                  5: 'from-green-500/20 to-green-600/5 text-green-600',
+                  10: 'from-red-500/20 to-red-600/5 text-red-600',
+                  20: 'from-orange-500/20 to-orange-600/5 text-orange-600',
+                  50: 'from-cyan-500/20 to-cyan-600/5 text-cyan-600',
+                  100: 'from-purple-500/20 to-purple-600/5 text-purple-600',
+                }
+                
+                return (
+                  <div 
+                    key={bill}
+                    className={`bg-gradient-to-br ${colors[bill]} border border-white/10 dark:border-white/5 rounded-2xl p-5 shadow-sm transition-transform hover:scale-[1.02]`}
+                  >
+                    <div className="flex justify-between items-start mb-4">
+                      <span className="text-sm font-black opacity-60 uppercase">RM{bill}</span>
+                      <div className="px-2 py-1 rounded-md bg-white/40 dark:bg-black/20 text-[10px] font-black">
+                        x{count}
+                      </div>
+                    </div>
+                    <div className="text-2xl font-black">
+                      RM {(bill * count).toFixed(0)}
+                    </div>
+                    <div className="mt-1 text-[10px] font-bold opacity-50 uppercase tracking-tighter">
+                      Subtotal
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Adjustments Log */}
+            <div className="lg:col-span-1">
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
+                {t('stats.adjustments' as any)}
+              </h3>
+              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                {adjustments.length === 0 ? (
+                  <div className="text-center py-12 opacity-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+                    <p className="text-sm font-medium text-zinc-500">{t('stats.noAdjustments' as any)}</p>
+                  </div>
+                ) : (
+                  adjustments.map((adj) => (
+                    <div key={adj.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl flex items-center justify-between group">
+                      <div className="flex items-center gap-3">
+                        <div className={`p-2 rounded-lg ${adj.type === 'ADDITION' ? 'bg-blue-500/10 text-blue-600' : 'bg-red-500/10 text-red-600'}`}>
+                          {adj.type === 'ADDITION' ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                        </div>
+                        <div>
+                          <div className="text-sm font-bold text-zinc-900 dark:text-white">{adj.reason}</div>
+                          <div className="text-[10px] text-zinc-500 uppercase font-bold">
+                            {adj.timestamp?.toDate ? adj.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <div className={`text-sm font-black ${adj.type === 'ADDITION' ? 'text-blue-600' : 'text-red-600'}`}>
+                          {adj.type === 'ADDITION' ? '+' : '-'} {formatCurrency(adj.amount)}
+                        </div>
+                        <button 
+                          onClick={() => deleteCashAdjustment(adj.id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 transition-all"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </main>
+
+      {/* Adjustment Modal */}
+      {showAdjModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <form onSubmit={handleAddAdjustment} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
+                {showAdjModal === 'ADDITION' ? t('stats.addCash' as any) : t('stats.addExpense' as any)}
+              </h3>
+              <button type="button" onClick={() => setShowAdjModal(null)} className="p-2 text-zinc-400 hover:text-white"><X /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">{t('stats.amount' as any)}</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-lg font-bold"
+                  value={adjForm.amount}
+                  onChange={(e) => setAdjForm({ ...adjForm, amount: e.target.value })}
+                  placeholder="0.00"
+                />
+              </div>
+              
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest">
+                    {t('payment.changeBills' as any)}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAdjForm(prev => ({ ...prev, amount: '', denominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } }))}
+                    className="text-[10px] font-bold text-blue-600 uppercase"
+                  >
+                    {t('payment.clearCash' as any)}
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 5, 10, 20, 50, 100].map((bill) => {
+                    const count = adjForm.denominations[bill] || 0
+                    const colors: Record<number, string> = {
+                      1: 'border-blue-500/30 text-blue-600',
+                      5: 'border-green-500/30 text-green-600',
+                      10: 'border-red-500/30 text-red-600',
+                      20: 'border-orange-500/30 text-orange-600',
+                      50: 'border-cyan-500/30 text-cyan-600',
+                      100: 'border-purple-500/30 text-purple-600',
+                    }
+                    return (
+                      <button
+                        key={bill}
+                        type="button"
+                        onClick={() => handleAdjBillClick(bill)}
+                        className={`relative py-3 rounded-xl border-2 font-black transition-all active:scale-95 ${
+                          count > 0 ? colors[bill] + ' bg-zinc-50 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        RM{bill}
+                        {count > 0 && (
+                          <span className="absolute -top-1 -right-1 w-5 h-5 bg-zinc-900 text-white text-[10px] rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">{t('stats.reason' as any)}</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold"
+                  value={adjForm.reason}
+                  onChange={(e) => setAdjForm({ ...adjForm, reason: e.target.value })}
+                  placeholder={showAdjModal === 'ADDITION' ? 'e.g., Starting Float' : 'e.g., Buy Soap'}
+                />
+              </div>
+            </div>
+            <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 flex gap-3">
+              <button type="button" onClick={() => setShowAdjModal(null)} className="flex-1 py-3 font-bold text-zinc-500">{t('common.cancel' as any)}</button>
+              <button 
+                type="submit" 
+                className={`flex-[2] py-3 rounded-xl font-bold text-white shadow-lg ${showAdjModal === 'ADDITION' ? 'bg-blue-600 shadow-blue-500/20' : 'bg-red-600 shadow-red-500/20'}`}
+              >
+                {t('common.confirm' as any)}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-gray-200 dark:border-zinc-800 mt-12 py-6 px-4 transition-colors duration-200">

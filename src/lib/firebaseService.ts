@@ -13,6 +13,11 @@ import {
   onSnapshot,
   Unsubscribe,
   deleteDoc,
+  orderBy,
+  limit,
+  startAfter,
+  endBefore,
+  limitToLast,
 } from 'firebase/firestore'
 import { db } from './firebase'
 import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
@@ -27,6 +32,7 @@ import {
 const TRANSACTIONS_COLLECTION = 'transactions'
 const DAILY_STATS_COLLECTION = 'daily_stats'
 const PRICE_BOOK_COLLECTION = 'price_book'
+const CASH_ADJUSTMENTS_COLLECTION = 'cash_adjustments'
 const storage = getStorage()
 
 function normalizeStorageFileName(value: string) {
@@ -112,7 +118,9 @@ export async function completeTransaction(
   paymentMethod: PaymentMethod,
   cashReceived: number,
   computedPrice: number,
-  addons: any[] = []
+  addons: any[] = [],
+  denominations: Record<string, number> = {},
+  changeDenominations: Record<string, number> = {}
 ): Promise<void> {
   const balance = cashReceived - computedPrice
   const transactionRef = doc(db, TRANSACTIONS_COLLECTION, transactionId)
@@ -123,6 +131,8 @@ export async function completeTransaction(
     cashReceived,
     balance,
     addons,
+    denominations,
+    changeDenominations,
     paidTime: serverTimestamp(),
   })
 }
@@ -189,6 +199,8 @@ export function listenToTransactions(
         addons: data.addons || [],
         imageUrl: data.imageUrl || null,
         imagePath: data.imagePath || null,
+        ...(data.denominations && { denominations: data.denominations }),
+        changeDenominations: data.changeDenominations || {},
       })
     })
     callback(transactions)
@@ -201,7 +213,9 @@ export function listenToTransactions(
 export async function updateDailyStats(
   paymentMethod: PaymentMethod,
   revenue: number,
-  totalCars: number
+  totalCars: number,
+  denominations: Record<string, number> = {},
+  changeDenominations: Record<string, number> = {}
 ): Promise<void> {
   const today = new Date().toISOString().split('T')[0]
   const statsRef = doc(db, DAILY_STATS_COLLECTION, today)
@@ -218,6 +232,17 @@ export async function updateDailyStats(
   // Check if document exists
   const docSnapshot = await getDoc(statsRef)
 
+  const denomUpdates: any = {}
+  if (paymentMethod === 'CASH') {
+    Object.entries(denominations).forEach(([bill, count]) => {
+      denomUpdates[`cashCount_${bill}`] = increment(count)
+    })
+    // Subtract bills given back as change
+    Object.entries(changeDenominations).forEach(([bill, count]) => {
+      denomUpdates[`cashCount_${bill}`] = increment(-count)
+    })
+  }
+
   if (docSnapshot.exists()) {
     // Update existing document
     const revenueField = paymentMethod === 'CASH' ? 'totalCashRevenue' : 'totalOnlineRevenue'
@@ -228,11 +253,19 @@ export async function updateDailyStats(
       seniorCars: increment(seniorCars),
       [revenueField]: increment(revenue),
       totalRevenue: increment(revenue),
+      ...denomUpdates
     })
   } else {
     // Create new document
     const cashRevenue = paymentMethod === 'CASH' ? revenue : 0
     const onlineRevenue = paymentMethod === 'ONLINE' ? revenue : 0
+
+    const initialDenoms: any = {}
+    if (paymentMethod === 'CASH') {
+      [1, 5, 10, 20, 50, 100].forEach(b => {
+        initialDenoms[`cashCount_${b}`] = denominations[b] || 0
+      })
+    }
 
     await setDoc(statsRef, {
       date: today,
@@ -243,6 +276,7 @@ export async function updateDailyStats(
       totalCashRevenue: cashRevenue,
       totalOnlineRevenue: onlineRevenue,
       totalRevenue: revenue,
+      ...initialDenoms
     })
   }
 }
@@ -474,6 +508,62 @@ export async function getTransactionsByPlate(plateNumber: string) {
   const results: any[] = []
   snapshot.forEach((d) => results.push({ id: d.id, ...d.data() }))
   return results
+}
+
+export async function getPastTransactions(
+  limitCount: number,
+  plate?: string,
+  afterDoc?: any,
+  beforeDoc?: any
+) {
+  const colRef = collection(db, TRANSACTIONS_COLLECTION)
+  let q = query(colRef, orderBy('checkInTime', 'desc'))
+
+  if (plate) {
+    q = query(q, where('plateNumber', '==', plate.toUpperCase()))
+  } else {
+    q = query(q, where('status', '==', 'COMPLETED'))
+  }
+
+  if (afterDoc) q = query(q, startAfter(afterDoc), limit(limitCount))
+  else if (beforeDoc) q = query(q, endBefore(beforeDoc), limitToLast(limitCount))
+  else q = query(q, limit(limitCount))
+
+  return await getDocs(q)
+}
+
+/**
+ * Cash Adjustment helpers (Expenses/Additions)
+ */
+export async function addCashAdjustment(type: 'EXPENSE' | 'ADDITION', amount: number, reason: string, denominations: Record<string, number> = {}) {
+  const today = todayDateString()
+  const data = {
+    type,
+    amount,
+    reason,
+    denominations,
+    date: today,
+    timestamp: serverTimestamp(),
+  }
+  return await addDoc(collection(db, CASH_ADJUSTMENTS_COLLECTION), data)
+}
+
+export function listenToTodayAdjustments(callback: (items: any[]) => void): Unsubscribe {
+  const today = todayDateString()
+  const q = query(
+    collection(db, CASH_ADJUSTMENTS_COLLECTION),
+    where('date', '==', today),
+    orderBy('timestamp', 'desc')
+  )
+  return onSnapshot(q, (snapshot) => {
+    const items: any[] = []
+    snapshot.forEach((d) => items.push({ id: d.id, ...d.data() }))
+    callback(items)
+  })
+}
+
+export async function deleteCashAdjustment(id: string) {
+  await deleteDoc(doc(db, CASH_ADJUSTMENTS_COLLECTION, id))
 }
 
 /**
