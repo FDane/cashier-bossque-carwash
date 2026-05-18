@@ -157,6 +157,11 @@ export default function StaffManagement() {
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-premium-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full table-auto border-separate" style={{ borderSpacing: '0 8px' }}>
+            {rows.length === 0 && (
+              <caption className="py-12 text-center text-zinc-500 dark:text-zinc-400 text-lg font-medium">
+                {t('staff.noClockInYet' as any)}
+              </caption>
+            )}
             <thead>
               <tr>
                 <th className="px-6 py-4"></th>

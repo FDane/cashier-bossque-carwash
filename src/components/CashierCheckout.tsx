@@ -697,7 +697,7 @@ export default function CashierCheckout({
               {/* Miscellaneous/Manual Charges */}
               <div className="space-y-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
                 <label className="block text-sm font-semibold text-zinc-900 dark:text-zinc-300">
-                  {t('stats.adjustments' as any)} (e.g. Dirty Charge)
+                  {t('cashier.miscCharges' as any)} (e.g. Dirty Charge)
                 </label>
                 <div className="flex gap-2">
                   <input 

@@ -56,6 +56,7 @@ export const translations = {
     'cashier.deleteSuccess': 'Car removed from queue',
     'cashier.editTitle': 'Edit Car Details',
     'cashier.updateSuccess': 'Car updated successfully',
+    'cashier.miscCharges': 'Miscellaneous/Manual Charges',
 
     // Customer
     'customer.title': 'Customer Management',
@@ -152,6 +153,7 @@ export const translations = {
     'staff.actions': 'Actions',
     'staff.addAdvance': 'Advance',
     'staff.noStaff': 'No staff records found for today',
+    'staff.noClockInYet': 'No staff clocked in yet today',
     'staff.clockOutConfirm': 'Are you sure you want to clock out the selected staff?',
     'staff.clockOutSuccess': 'Staff clocked out successfully',
     'staff.clockOutError': 'Error clocking out staff',
@@ -249,6 +251,7 @@ export const translations = {
     'cashier.deleteSuccess': 'Kereta dikeluarkan dari queue',
     'cashier.editTitle': 'Kemaskini Maklumat Kereta',
     'cashier.updateSuccess': 'Maklumat kereta dikemas kini',
+    'cashier.miscCharges': 'Caj Tambahan',
 
     // Customer
     'customer.title': 'Pengurusan Pelanggan',
@@ -345,6 +348,7 @@ export const translations = {
     'staff.actions': 'Tindakan',
     'staff.addAdvance': 'Pinjaman',
     'staff.noStaff': 'Tiada rekod kakitangan untuk hari ini',
+    'staff.noClockInYet': 'Tiada kakitangan yang clock in lagi hari ini',
     'staff.clockOutConfirm': 'Adakah anda pasti mahu clock out kakitangan yang dipilih?',
     'staff.clockOutSuccess': 'Kakitangan berhasil clock out',
     'staff.clockOutError': 'Ralat saat clock out kakitangan',
