@@ -1,8 +1,22 @@
 /**
+ * Get current date string in Asia/Kuala_Lumpur (YYYY-MM-DD)
+ * This ensures business logic stays in UTC+8 regardless of server/client location.
+ */
+export function getKLDateString(date: Date = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Kuala_Lumpur',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(date)
+}
+
+/**
  * Format currency for display
  */
 export function formatCurrency(amount: number, currency = 'RM'): string {
-  return `${currency} ${amount.toFixed(2)}`
+  const value = typeof amount === 'number' ? amount : 0
+  return `${currency} ${value.toFixed(2)}`
 }
 
 /**

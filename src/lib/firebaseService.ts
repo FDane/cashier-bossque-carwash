@@ -28,11 +28,13 @@ import {
   DailyStats,
   CarService,
 } from '@/types'
+import { getKLDateString } from './utils'
 
 const TRANSACTIONS_COLLECTION = 'transactions'
 const DAILY_STATS_COLLECTION = 'daily_stats'
 const PRICE_BOOK_COLLECTION = 'price_book'
 const CASH_ADJUSTMENTS_COLLECTION = 'cash_adjustments'
+const DAILY_SALARIES_COLLECTION = 'daily_salaries'
 const storage = getStorage()
 
 function normalizeStorageFileName(value: string) {
@@ -217,7 +219,7 @@ export async function updateDailyStats(
   denominations: Record<string, number> = {},
   changeDenominations: Record<string, number> = {}
 ): Promise<void> {
-  const today = new Date().toISOString().split('T')[0]
+  const today = getKLDateString()
   const statsRef = doc(db, DAILY_STATS_COLLECTION, today)
 
   // Determine car level
@@ -346,13 +348,13 @@ export async function getDailyStats(date: string): Promise<DailyStats | null> {
 }
 
 // New collections for staff, attendance, inventory, customers
-const STAFF_COLLECTION = 'staff'
+const STAFF_COLLECTION = 'users'
 const ATTENDANCE_COLLECTION = 'attendance'
 const INVENTORY_COLLECTION = 'inventory'
 const CUSTOMERS_COLLECTION = 'customers'
 
 function todayDateString() {
-  return new Date().toISOString().split('T')[0]
+  return getKLDateString()
 }
 
 /**
@@ -393,25 +395,43 @@ export async function listenToTodayAttendance(callback: (rows: any[]) => void) {
   )
   return onSnapshot(q, (snapshot) => {
     const rows: any[] = []
-    snapshot.forEach((d) => rows.push({ id: d.id, ...d.data() }))
+    snapshot.forEach((d) => rows.push({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }))
     callback(rows)
   })
+}
+
+export async function clockOutAttendance(attendanceId: string): Promise<void> {
+  const ref = doc(db, ATTENDANCE_COLLECTION, attendanceId)
+  await updateDoc(ref, { clockOutTime: serverTimestamp() })
 }
 
 export async function clockOutAllToday(): Promise<void> {
   const today = todayDateString()
   const q = query(
     collection(db, ATTENDANCE_COLLECTION),
-    where('date', '==', today),
-    where('checkOutTime', '==', null)
+    where('date', '==', today)
   )
   const snapshot = await getDocs(q)
-  const updates: Promise<void>[] = []
-  snapshot.forEach((d) => {
-    const ref = doc(db, ATTENDANCE_COLLECTION, d.id)
-    updates.push(updateDoc(ref, { checkOutTime: serverTimestamp() }))
-  })
+  const updates = snapshot.docs
+    .map(d => clockOutAttendance(d.id))
+  
   await Promise.all(updates)
+}
+
+/**
+ * Records a staff advance, updates cash drawer, attendance, and daily salaries
+ */
+export async function recordStaffAdvance(
+staffId: string, staffName: string, amount: number, denominations: Record<string, number> = {}, _p0: any): Promise<void> {
+  const today = todayDateString()
+  
+  // 1. Add to cash adjustments (Drawer Expense)
+  await addCashAdjustment('EXPENSE', amount, `Staff Advance: ${staffName}`, denominations)
+  
+  // 2. Update Daily Salaries record
+  const salaryId = `${staffId}_${today}`
+  const salaryRef = doc(db, DAILY_SALARIES_COLLECTION, salaryId)
+  await setDoc(salaryRef, { staffId, date: today, advancesDeducted: increment(amount) }, { merge: true })
 }
 
 export async function addMoneyAdvanceForAttendance(attendanceId: string, amount: number) {
@@ -419,15 +439,20 @@ export async function addMoneyAdvanceForAttendance(attendanceId: string, amount:
   await updateDoc(ref, { moneyAdvance: increment(amount) })
 }
 
-export async function checkInStaff(staffId: string) {
+export async function checkInStaff(staffId: string, imageUrl?: string, imagePath?: string) {
   const today = todayDateString()
-  const attendanceData = {
+  const attendanceData: any = {
     staffId,
     date: today,
-    checkInTime: serverTimestamp(),
-    checkOutTime: null,
+    clockInTime: serverTimestamp(),
+    clockOutTime: null,
+    createdAt: serverTimestamp(),
     moneyAdvance: 0,
   }
+
+  if (imageUrl) attendanceData.imageUrl = imageUrl
+  if (imagePath) attendanceData.imagePath = imagePath
+
   const docRef = await addDoc(collection(db, ATTENDANCE_COLLECTION), attendanceData)
   return docRef.id
 }
@@ -439,17 +464,27 @@ export async function addInventoryItem(item: {
   name: string
   category: string
   quantity: number
-  lowStockThreshold?: number
+  reorderLevel: number
+  cost: number
+  price: number
+  supplier: string
+  unit: string
 }) {
+  const now = new Date().toISOString()
   const docRef = await addDoc(collection(db, INVENTORY_COLLECTION), {
     ...item,
+    createdAt: now,
+    lastUpdated: now,
   })
   return docRef.id
 }
 
 export async function updateInventoryItem(itemId: string, updates: Partial<any>) {
   const ref = doc(db, INVENTORY_COLLECTION, itemId)
-  await updateDoc(ref, updates)
+  await updateDoc(ref, {
+    ...updates,
+    lastUpdated: new Date().toISOString()
+  })
 }
 
 /**
@@ -462,7 +497,10 @@ export async function deleteInventoryItem(itemId: string): Promise<void> {
 
 export async function updateInventoryQuantity(itemId: string, delta: number) {
   const ref = doc(db, INVENTORY_COLLECTION, itemId)
-  await updateDoc(ref, { quantity: increment(delta) })
+  await updateDoc(ref, { 
+    quantity: increment(delta),
+    lastUpdated: new Date().toISOString()
+  })
 }
 
 export async function decrementInventoryByOne(itemId: string) {
@@ -474,7 +512,7 @@ export async function getLowStockItems() {
   const results: any[] = []
   snapshot.forEach((d) => {
     const data = d.data()
-    const threshold = data.lowStockThreshold ?? 5
+    const threshold = data.reorderLevel ?? 3
     if ((data.quantity ?? 0) <= threshold) results.push({ id: d.id, ...data })
   })
   return results
@@ -489,6 +527,18 @@ export async function getInventoryList() {
 
 export function listenToInventory(callback: (items: any[]) => void) {
   return onSnapshot(collection(db, INVENTORY_COLLECTION), (snapshot) => {
+    const items: any[] = []
+    snapshot.forEach((d) => items.push({ id: d.id, ...d.data() }))
+    callback(items)
+  })
+}
+
+export function listenToRetailItems(callback: (items: any[]) => void) {
+  const q = query(
+    collection(db, INVENTORY_COLLECTION),
+    where('category', '==', 'retailItem')
+  )
+  return onSnapshot(q, (snapshot) => {
     const items: any[] = []
     snapshot.forEach((d) => items.push({ id: d.id, ...d.data() }))
     callback(items)
@@ -512,17 +562,19 @@ export async function getTransactionsByPlate(plateNumber: string) {
 
 export async function getPastTransactions(
   limitCount: number,
-  plate?: string,
+  _plate?: string,
   afterDoc?: any,
-  beforeDoc?: any
+  beforeDoc?: any,
+  date?: string
 ) {
   const colRef = collection(db, TRANSACTIONS_COLLECTION)
   let q = query(colRef, orderBy('checkInTime', 'desc'))
+  q = query(q, where('status', '==', 'COMPLETED'))
 
-  if (plate) {
-    q = query(q, where('plateNumber', '==', plate.toUpperCase()))
-  } else {
-    q = query(q, where('status', '==', 'COMPLETED'))
+  if (date) {
+    const start = new Date(`${date}T00:00:00+08:00`)
+    const end = new Date(`${date}T23:59:59+08:00`)
+    q = query(q, where('checkInTime', '>=', start), where('checkInTime', '<=', end))
   }
 
   if (afterDoc) q = query(q, startAfter(afterDoc), limit(limitCount))

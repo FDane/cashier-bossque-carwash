@@ -7,21 +7,25 @@ import {
   Plus, 
   Clock, 
   CheckCircle2,
+  ImageIcon,
 } from 'lucide-react'
 import {
   listenToTodayAttendance,
   getStaffList,
-  addMoneyAdvanceForAttendance,
-  clockOutAllToday,
+  clockOutAttendance,
 } from '@/lib/firebaseService'
+import { showToast } from '@/lib/toast'
 
 interface AttendanceRow {
   id: string
   staffId: string
   date: string
-  checkInTime: any
-  checkOutTime?: any
+  clockInTime: any
+  clockOutTime?: any
+  createdAt?: any
   moneyAdvance?: number
+  imageUrl?: string
+  imagePath?: string
 }
 
 export default function StaffManagement() {
@@ -29,8 +33,8 @@ export default function StaffManagement() {
   const [rows, setRows] = useState<AttendanceRow[]>([])
   const [staffMap, setStaffMap] = useState<Record<string, any>>({})
   const [selected, setSelected] = useState<Record<string, boolean>>({})
-  const [advanceInputs, setAdvanceInputs] = useState<Record<string, string>>({})
   const [selectAll, setSelectAll] = useState(false)
+  const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null)
 
   useEffect(() => {
     let unsub: (() => void) | undefined
@@ -46,6 +50,14 @@ export default function StaffManagement() {
 
       const cleanup = await listenToTodayAttendance((data) => {
         if (!isMounted) return
+        
+        // Logging attendance with Document ID and resolved Staff Name
+        console.log('Attendance Sync [Doc ID]:', data.map(r => ({ 
+          docId: r.id, 
+          staffName: map[r.staffId]?.name || map[r.staffId]?.displayName || 'Unknown', // Prioritize 'name', then 'displayName'
+          clockIn: r.clockInTime 
+        })))
+        
         setRows(data)
         const sel: Record<string, boolean> = {}
         data.forEach((r: any) => (sel[r.id] = false))
@@ -84,18 +96,26 @@ export default function StaffManagement() {
   }
 
   async function handleClockOutSelected() {
-    if (window.confirm(t('cashier.confirmDelete' as any) || 'Clock out all active staff?')) {
-    // For simplicity, clock out all (backend supports clockOutAllToday)
-    await clockOutAllToday()
-    }
-  }
+    const selectedIds = rows
+      .filter(r => selected[r.id])
+      .map(r => r.id)
 
-  async function handleAddAdvance(attendanceId: string) {
-    const raw = advanceInputs[attendanceId]
-    const amt = parseFloat(raw || '0')
-    if (!amt || amt <= 0) return
-    await addMoneyAdvanceForAttendance(attendanceId, amt)
-    setAdvanceInputs((s) => ({ ...s, [attendanceId]: '' }))
+    if (selectedIds.length === 0) return
+
+    if (window.confirm(t('staff.clockOutConfirm' as any) || 'Clock out selected staff?')) {
+      try {
+        await Promise.all(selectedIds.map(id => clockOutAttendance(id)))
+        showToast.success(t('staff.clockOutSuccess' as any))
+        
+        // Reset selection for the records we just updated
+        const newSel = { ...selected }
+        selectedIds.forEach(id => newSel[id] = false)
+        setSelected(newSel)
+      } catch (err) {
+        console.error('Clock out error:', err)
+        showToast.error(t('staff.clockOutError' as any))
+      }
+    }
   }
 
   return (
@@ -140,11 +160,9 @@ export default function StaffManagement() {
             <thead>
               <tr>
                 <th className="px-6 py-4"></th>
-                <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.name' as any)}</th>
+                <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.image' as any)} / {t('staff.name' as any)}</th>
                 <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.checkIn' as any)}</th>
                 <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.checkOut' as any)}</th>
-                <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.advance' as any)}</th>
-                <th className="text-right px-8 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.actions' as any)}</th>
               </tr>
             </thead>
             <tbody>
@@ -166,50 +184,47 @@ export default function StaffManagement() {
                 </td>
                 <td className="py-4 px-4 font-bold text-zinc-900 dark:text-white">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[10px] font-black uppercase">
-                      {staffMap[r.staffId]?.displayName?.substring(0, 2) || 'ST'}
-                    </div>
-                    {staffMap[r.staffId]?.displayName || r.staffId}
+                    {r.imageUrl ? (
+                      <img 
+                        src={r.imageUrl} 
+                        alt="" 
+                        className="w-10 h-10 rounded-full object-cover border border-zinc-200 dark:border-zinc-800 shadow-sm cursor-pointer hover:scale-110 transition-transform"
+                        onClick={() => setViewingImageUrl(r.imageUrl || null)}
+                      />
+                    ) : staffMap[r.staffId]?.imageUrl ? (
+                      <img 
+                        src={staffMap[r.staffId].imageUrl} 
+                        alt="" 
+                        className="w-10 h-10 rounded-full object-cover border border-zinc-200 dark:border-zinc-800 shadow-sm opacity-50"
+                        title="Profile picture (No clock-in photo)"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center shadow-sm">
+                        <ImageIcon className="w-4 h-4 text-zinc-400" />
+                      </div>
+                    )}
+                    {staffMap[r.staffId]?.name || staffMap[r.staffId]?.displayName || r.staffId} {/* Prioritize 'name', then 'displayName' */}
                   </div>
                 </td>
                 <td className="py-4 px-4">
                   <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-mono">
                     <Clock className="w-3.5 h-3.5 text-blue-500" />
-                    {r.checkInTime?.toDate ? r.checkInTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(r.checkInTime)}
+                    {r.clockInTime?.toDate 
+                      ? r.clockInTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                      : (r.clockInTime ? 'Loading...' : '--:--')}
                   </div>
                 </td>
-                <td className="py-4 px-4">
-                  {r.checkOutTime ? (
+                <td className="py-4 px-4 rounded-r-2xl">
+                  {r.clockOutTime ? (
                     <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-mono">
                       <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
-                      {r.checkOutTime.toDate ? r.checkOutTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(r.checkOutTime)}
+                      {r.clockOutTime.toDate 
+                        ? r.clockOutTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) 
+                        : '...'}
                     </div>
                   ) : (
                     <span className="px-2 py-0.5 bg-amber-500/10 text-amber-600 text-[10px] font-black rounded-full uppercase">Active</span>
                   )}
-                </td>
-                <td className="py-4 px-4 font-bold text-zinc-900 dark:text-white">
-                  RM {r.moneyAdvance ?? 0}
-                </td>
-                <td className="py-4 px-8 rounded-r-2xl text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-zinc-400">RM</span>
-                    <input
-                        className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 pl-8 pr-3 py-2 rounded-xl w-24 text-sm font-bold focus:ring-2 focus:ring-blue-500/50 outline-none transition-all"
-                      value={advanceInputs[r.id] ?? ''}
-                      onChange={(e) => setAdvanceInputs((s) => ({ ...s, [r.id]: e.target.value }))}
-                        placeholder="0.00"
-                    />
-                    </div>
-                    <button
-                      className="p-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md shadow-blue-500/20 transition-all active:scale-90"
-                      onClick={() => handleAddAdvance(r.id)}
-                      title={t('staff.addAdvance' as any)}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                  </div>
                 </td>
               </tr>
             ))}
@@ -217,6 +232,26 @@ export default function StaffManagement() {
         </table>
       </div>
       </div>
+
+      {/* Image Viewer Modal */}
+      {viewingImageUrl && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setViewingImageUrl(null)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">Clock-in Photo</h3>
+              <button
+                onClick={() => setViewingImageUrl(null)}
+                className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
+              >
+                <Plus className="w-6 h-6 rotate-45" />
+              </button>
+            </div>
+            <div className="p-4">
+              <img src={viewingImageUrl} alt="Staff Clock-in" className="w-full h-auto rounded-xl shadow-lg" />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

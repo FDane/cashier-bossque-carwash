@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import { 
   getPastTransactions 
 } from '@/lib/firebaseService'
@@ -14,11 +14,12 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, getKLDateString } from '@/lib/utils'
 
 export default function PastCarSearch() {
   const { t } = useLanguage()
   const [plate, setPlate] = useState('')
+  const [selectedDate, setSelectedDate] = useState(getKLDateString())
   const [results, setResults] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [viewLimit, setViewLimit] = useState(10)
@@ -29,16 +30,24 @@ export default function PastCarSearch() {
   useEffect(() => {
     handleSearch()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewLimit])
+  }, [viewLimit, selectedDate])
+
+  // Dynamic Client-side Filtering
+  const filteredResults = useMemo(() => {
+    const search = plate.trim().toUpperCase()
+    if (!search) return results
+    return results.filter(r => r.plateNumber.includes(search))
+  }, [results, plate])
 
   async function handleSearch(direction?: 'next' | 'prev') {
     setLoading(true)
     try {
       const snapshot = await getPastTransactions(
-        viewLimit, 
-        plate || undefined,
+        viewLimit,
+        undefined, // We filter plate locally now
         direction === 'next' ? lastDoc : undefined,
-        direction === 'prev' ? firstDoc : undefined
+        direction === 'prev' ? firstDoc : undefined,
+        selectedDate || undefined
       )
 
       
@@ -70,7 +79,7 @@ export default function PastCarSearch() {
       {/* Search Card */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-premium-lg">
         <div className="flex flex-col sm:flex-row gap-4">
-          <div className="relative flex-1">
+          <div className="relative flex-[2]">
             <Car className="absolute left-4 top-1/2 -translate-y-1/2 w-6 h-6 text-zinc-400 group-focus-within:text-blue-500 transition-colors" />
             <input
               type="text"
@@ -80,8 +89,17 @@ export default function PastCarSearch() {
               className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl pl-14 pr-6 py-4 text-xl font-mono font-bold text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all shadow-sm"
             />
           </div>
+          <div className="relative flex-1">
+            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all shadow-sm cursor-pointer"
+            />
+          </div>
           <button 
-            className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-3 disabled:opacity-50"
+            className="px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-3 disabled:opacity-50 active:scale-95"
             onClick={() => handleSearch()}
             disabled={loading}
           >
@@ -93,7 +111,7 @@ export default function PastCarSearch() {
 
       {/* Results Container */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-premium-lg overflow-hidden">
-        {results.length === 0 ? (
+        {filteredResults.length === 0 ? (
           <div className="text-center py-20">
             <Search className="w-12 h-12 text-zinc-600 mx-auto mb-4 opacity-20" />
             <p className="text-zinc-500 text-lg font-medium">{t('cashier.noResults' as any)}</p>
@@ -111,10 +129,13 @@ export default function PastCarSearch() {
                 </tr>
               </thead>
               <tbody>
-                {results.map((r) => (
+                {filteredResults.map((r) => (
                   <tr key={r.id} className="group bg-zinc-50/50 dark:bg-zinc-800/30 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors">
-                    <td className="py-5 px-8 rounded-l-2xl font-mono font-bold text-xl text-zinc-900 dark:text-white">
-                      {r.plateNumber}
+                    <td className="py-5 px-8 rounded-l-2xl">
+                      <div className="font-mono font-bold text-xl text-zinc-900 dark:text-white leading-tight">{r.plateNumber}</div>
+                      <div className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mt-0.5">
+                        {r.brand} {r.model}
+                      </div>
                     </td>
                     <td className="py-5 px-4">
                       <div className="flex flex-wrap gap-1.5">

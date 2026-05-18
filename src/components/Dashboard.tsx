@@ -5,21 +5,40 @@ import CarEntryIntake from '@/components/CarEntryIntake'
 import CashierCheckout from '@/components/CashierCheckout'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useLanguage } from '@/hooks/useLanguage'
-import { ChevronDown, ChevronUp, Wallet, Banknote, Plus, Minus, X, Trash2 } from 'lucide-react'
-import { listenToTodayAdjustments, addCashAdjustment, deleteCashAdjustment } from '@/lib/firebaseService'
+import { 
+  ChevronDown, 
+  ChevronUp, 
+  Wallet, 
+  Banknote, 
+  Plus, 
+  Minus, 
+  X, 
+  Trash2, 
+  UserPlus 
+} from 'lucide-react'
+import { listenToTodayAdjustments, addCashAdjustment, deleteCashAdjustment, getStaffList, listenToTodayAttendance, recordStaffAdvance } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, getKLDateString } from '@/lib/utils'
 
 export default function Dashboard() {
   const { t } = useLanguage()
   const [isCheckoutExpanded, setIsCheckoutExpanded] = useState(false)
   const [adjustments, setAdjustments] = useState<any[]>([])
   const [showAdjModal, setShowAdjModal] = useState<'EXPENSE' | 'ADDITION' | null>(null)
+  const [showAdvanceModal, setShowAdvanceModal] = useState(false)
+  const [staffMap, setStaffMap] = useState<Record<string, any>>({})
+  const [attendance, setAttendance] = useState<any[]>([])
   const [adjForm, setAdjForm] = useState({ 
     amount: '', 
     reason: '',
     denominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } as Record<number, number>
   })
+  const [advForm, setAdvForm] = useState({ 
+    attendanceId: '', 
+    amount: '',
+    denominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } as Record<number, number>
+  })
+  const [loading, setLoading] = useState(false)
 
   // Listen to PENDING transactions (intake queue)
   const {
@@ -32,17 +51,29 @@ export default function Dashboard() {
 
   useEffect(() => {
     const unsub = listenToTodayAdjustments(setAdjustments)
-    return () => unsub()
+    
+    // Load staff names and today's attendance
+    let unsubAttendance: any
+    const setup = async () => {
+      const list = await getStaffList()
+      const map: Record<string, any> = {}
+      list.forEach(s => map[s.id] = s)
+      setStaffMap(map)
+      
+      unsubAttendance = await listenToTodayAttendance(setAttendance)
+    }
+    setup()
+
+    return () => { unsub(); if (unsubAttendance) unsubAttendance(); }
   }, [])
 
   // Filter transactions to only include those completed today
   const todayCompleted = useMemo(() => {
-    const todayStr = new Date().toDateString()
+    const todayStr = getKLDateString()
     return completedTransactions.filter(trans => {
       if (!trans.paidTime) return false
-      // paidTime is converted to a Date object in our firebaseService listener
       const paidDate = trans.paidTime instanceof Date ? trans.paidTime : new Date(trans.paidTime)
-      return paidDate.toDateString() === todayStr
+      return getKLDateString(paidDate) === todayStr
     })
   }, [completedTransactions])
 
@@ -132,6 +163,47 @@ export default function Dashboard() {
     }
   }
 
+  const handleAdvBillClick = (bill: number) => {
+    setAdvForm(prev => {
+      const newDenoms = { ...prev.denominations, [bill]: (prev.denominations[bill] || 0) + 1 }
+      const newAmount = Object.entries(newDenoms).reduce((sum, [b, c]) => sum + (parseInt(b) * c), 0)
+      return {
+        ...prev,
+        denominations: newDenoms,
+        amount: newAmount.toString()
+      }
+    })
+  }
+
+  const handleAddAdvance = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!advForm.attendanceId || !advForm.amount) return
+    
+    setLoading(true)
+    try {
+      const att = attendance.find(a => a.id === advForm.attendanceId)
+      const staffName = staffMap[att.staffId]?.name || staffMap[att.staffId]?.displayName || 'Staff'
+      
+      await recordStaffAdvance(
+        att.staffId,
+        staffName,
+        parseFloat(advForm.amount),
+        att.id,
+        advForm.denominations as any
+      )
+      
+      showToast.success(t('common.success' as any))
+      setShowAdvanceModal(false)
+      setAdvForm({ 
+        attendanceId: '', 
+        amount: '',
+        denominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }
+      })
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-950 dark:text-white transition-colors duration-200">
       {/* Main Content */}
@@ -204,6 +276,12 @@ export default function Dashboard() {
                       className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider shadow-lg shadow-red-500/20 active:scale-95"
                     >
                       <Minus className="w-3.5 h-3.5" /> {t('stats.addExpense' as any)}
+                    </button>
+                    <button 
+                      onClick={() => setShowAdvanceModal(true)}
+                      className="px-3 py-1.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider active:scale-95"
+                    >
+                      <UserPlus className="w-3.5 h-3.5" /> {t('staff.addAdvance' as any)}
                     </button>
                   </div>
                 </div>
@@ -333,9 +411,9 @@ export default function Dashboard() {
                   type="number"
                   step="0.01"
                   required
-                  className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-lg font-bold"
+                  className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-lg font-bold cursor-not-allowed opacity-70"
                   value={adjForm.amount}
-                  onChange={(e) => setAdjForm({ ...adjForm, amount: e.target.value })}
+                  readOnly
                   placeholder="0.00"
                 />
               </div>
@@ -404,6 +482,104 @@ export default function Dashboard() {
                 className={`flex-[2] py-3 rounded-xl font-bold text-white shadow-lg ${showAdjModal === 'ADDITION' ? 'bg-blue-600 shadow-blue-500/20' : 'bg-red-600 shadow-red-500/20'}`}
               >
                 {t('common.confirm' as any)}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Staff Advance Modal */}
+      {showAdvanceModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <form onSubmit={handleAddAdvance} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{t('staff.addAdvance' as any)}</h3>
+              <button type="button" onClick={() => setShowAdvanceModal(false)} className="p-2 text-zinc-400 hover:text-white"><X /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">{t('staff.name' as any)}</label>
+                <select
+                  required
+                  className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold"
+                  value={advForm.attendanceId}
+                  onChange={(e) => setAdvForm({ ...advForm, attendanceId: e.target.value })}
+                >
+                  <option value="">Select Staff</option>
+                  {attendance.map((row) => (
+                    <option key={row.id} value={row.id}>
+                      {staffMap[row.staffId]?.name || staffMap[row.staffId]?.displayName || 'Unknown'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <label className="text-xs font-black text-zinc-500 uppercase tracking-widest">
+                    {t('payment.changeBills' as any)}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAdvForm(prev => ({ ...prev, amount: '', denominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } }))}
+                    className="text-[10px] font-bold text-blue-600 uppercase"
+                  >
+                    {t('payment.clearCash' as any)}
+                  </button>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 5, 10, 20, 50, 100].map((bill) => {
+                    const count = advForm.denominations[bill] || 0
+                    const colors: Record<number, string> = {
+                      1: 'border-blue-500/30 text-blue-600',
+                      5: 'border-green-500/30 text-green-600',
+                      10: 'border-red-500/30 text-red-600',
+                      20: 'border-orange-500/30 text-orange-600',
+                      50: 'border-cyan-500/30 text-cyan-600',
+                      100: 'border-purple-500/30 text-purple-600',
+                    }
+                    return (
+                      <button
+                        key={bill}
+                        type="button"
+                        onClick={() => handleAdvBillClick(bill)}
+                        className={`relative py-3 rounded-xl border-2 font-black transition-all active:scale-95 ${
+                          count > 0 ? colors[bill] + ' bg-zinc-50 dark:bg-zinc-800' : 'border-zinc-200 dark:border-zinc-800 text-zinc-400'
+                        }`}
+                      >
+                        RM{bill}
+                        {count > 0 && (
+                          <span className="absolute -top-1 -right-1 w-5 h-5 bg-zinc-900 text-white text-[10px] rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">
+                            {count}
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">{t('stats.amount' as any)}</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-lg font-bold cursor-not-allowed opacity-70"
+                  value={advForm.amount}
+                  readOnly
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+            <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50 flex gap-3">
+              <button type="button" onClick={() => setShowAdvanceModal(false)} className="flex-1 py-3 font-bold text-zinc-500" disabled={loading}>{t('common.cancel' as any)}</button>
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="flex-[2] py-3 bg-blue-600 rounded-xl font-bold text-white shadow-lg shadow-blue-500/20 disabled:opacity-50"
+              >
+                {loading ? 'Processing...' : t('common.confirm' as any)}
               </button>
             </div>
           </form>

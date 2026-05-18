@@ -16,6 +16,7 @@ import {
   Edit,
   Trash2,
   Image as ImageIcon,
+  PlusCircle,
 } from 'lucide-react'
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
@@ -25,7 +26,8 @@ import {
   deleteTransaction, 
   updateTransaction, 
   uploadImageToFirebase,
-  listenToFullPriceBook
+  listenToFullPriceBook,
+  listenToRetailItems
 } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency, formatTime } from '@/lib/utils'
@@ -42,13 +44,6 @@ const SERVICE_CATEGORIES = {
   engine: { ms: 'Enjin', en: 'Engine' },
 }
 
-const RETAIL_ITEMS = [
-  { id: 'microfiber', name: 'Microfiber Cloth', price: 10 },
-  { id: 'fragrance', name: 'Dwangi Fragrance', price: 11 },
-  { id: 'tyreshine', name: 'Tyre Shine (Bottle)', price: 25 },
-  { id: 'wiper', name: 'Wiper Fluid', price: 8 },
-]
-
 interface SelectedAddon {
   id: string
   name: string
@@ -61,6 +56,7 @@ interface CheckoutModalData {
   paymentMethod: PaymentMethod
   cashReceived: number
   selectedAddons: SelectedAddon[]
+  miscCharges: { name: string; price: number }[]
   cashDenominations: Record<number, number>
   changeDenominations: Record<number, number>
 }
@@ -72,11 +68,13 @@ export default function CashierCheckout({
   const { t, language } = useLanguage()
   const [searchQuery, setSearchQuery] = useState('')
   const [priceBook, setPriceBook] = useState<any[]>([])
+  const [retailItems, setRetailItems] = useState<any[]>([])
   const [checkoutModal, setCheckoutModal] = useState<CheckoutModalData>({
     transaction: null,
     paymentMethod: null,
     cashReceived: 0,
     selectedAddons: [],
+    miscCharges: [],
     cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
     changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
   })
@@ -84,15 +82,21 @@ export default function CashierCheckout({
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [checkoutImagePreviewUrl, setCheckoutImagePreviewUrl] = useState<string | null>(null)
 
+  // State for Manual/Misc charge form
+  const [miscForm, setMiscForm] = useState({ name: '', price: '' })
+
   // State for viewing image in a modal
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null)
   const checkoutImageInputRef = React.useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const unsub = listenToFullPriceBook((items) => {
+    const unsubPrice = listenToFullPriceBook((items) => {
       setPriceBook(items)
     })
-    return () => unsub()
+    const unsubRetail = listenToRetailItems((items) => {
+      setRetailItems(items)
+    })
+    return () => { unsubPrice(); unsubRetail(); }
   }, [])
 
   // Local filtering: No extra Firebase cost
@@ -111,8 +115,12 @@ export default function CashierCheckout({
       (sum, item) => sum + item.price * item.quantity,
       0
     )
-    return checkoutModal.transaction.computedPrice + addonsTotal
-  }, [checkoutModal.transaction, checkoutModal.selectedAddons])
+    const miscTotal = checkoutModal.miscCharges.reduce(
+      (sum, item) => sum + item.price,
+      0
+    )
+    return checkoutModal.transaction.computedPrice + addonsTotal + miscTotal
+  }, [checkoutModal.transaction, checkoutModal.selectedAddons, checkoutModal.miscCharges])
 
   // Calculate balance in real-time
   const balance = useMemo(() => {
@@ -133,6 +141,7 @@ export default function CashierCheckout({
       paymentMethod: null,
       cashReceived: 0,
       selectedAddons: [],
+      miscCharges: [],
       cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
       changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
     })
@@ -148,13 +157,6 @@ export default function CashierCheckout({
     })
   }
 
-  const handleCashReceivedChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = parseFloat(e.target.value) || 0
-    setCheckoutModal({
-      ...checkoutModal,
-      cashReceived: value,
-    })
-  }
 
   const handleAddAddon = (item: { id: string; name: string; price: number }) => {
     setCheckoutModal((prev) => {
@@ -180,6 +182,24 @@ export default function CashierCheckout({
       selectedAddons: prev.selectedAddons
         .map((a) => (a.id === id ? { ...a, quantity: Math.max(0, a.quantity + delta) } : a))
         .filter((a) => a.quantity > 0),
+    }))
+  }
+
+  const handleAddMiscCharge = () => {
+    const price = parseFloat(miscForm.price)
+    if (!miscForm.name || isNaN(price)) return
+
+    setCheckoutModal(prev => ({
+      ...prev,
+      miscCharges: [...prev.miscCharges, { name: miscForm.name, price }]
+    }))
+    setMiscForm({ name: '', price: '' })
+  }
+
+  const handleRemoveMiscCharge = (index: number) => {
+    setCheckoutModal(prev => ({
+      ...prev,
+      miscCharges: prev.miscCharges.filter((_, i) => i !== index)
     }))
   }
 
@@ -301,13 +321,24 @@ export default function CashierCheckout({
     setProcessingId(checkoutModal.transaction.id)
 
     try {
+      // Merge retail addons and misc charges for the database
+      const allAddons = [
+        ...checkoutModal.selectedAddons,
+        ...checkoutModal.miscCharges.map(m => ({ 
+          id: `misc_${Date.now()}_${m.name}`, 
+          name: m.name, 
+          price: m.price, 
+          quantity: 1 
+        }))
+      ]
+
       // Update transaction status to COMPLETED
       await completeTransaction(
         checkoutModal.transaction.id,
         checkoutModal.paymentMethod,
         checkoutModal.cashReceived,
         totalWithAddons,
-        checkoutModal.selectedAddons,
+        allAddons,
         checkoutModal.cashDenominations,
         checkoutModal.changeDenominations
       )
@@ -329,6 +360,7 @@ export default function CashierCheckout({
         paymentMethod: null,
         cashReceived: 0,
         selectedAddons: [],
+        miscCharges: [],
         cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
         changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
       })
@@ -346,6 +378,7 @@ export default function CashierCheckout({
       paymentMethod: null,
       cashReceived: 0,
       selectedAddons: [],
+      miscCharges: [],
       cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
       changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
     })
@@ -619,10 +652,10 @@ export default function CashierCheckout({
                 
                 {/* Available Items */}
                 <div className="flex flex-wrap gap-2">
-                  {RETAIL_ITEMS.map((item) => (
+                  {retailItems.map((item) => (
                     <button
                       key={item.id}
-                      onClick={() => handleAddAddon(item)}
+                      onClick={() => handleAddAddon({ id: item.id, name: item.name, price: item.price })}
                       className="px-3 py-2 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-colors flex items-center gap-2"
                     >
                       <Plus className="w-3 h-3" />
@@ -655,6 +688,55 @@ export default function CashierCheckout({
                             <Plus className="w-4 h-4" />
                           </button>
                         </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Miscellaneous/Manual Charges */}
+              <div className="space-y-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <label className="block text-sm font-semibold text-zinc-900 dark:text-zinc-300">
+                  {t('stats.adjustments' as any)} (e.g. Dirty Charge)
+                </label>
+                <div className="flex gap-2">
+                  <input 
+                    type="text"
+                    placeholder="Charge Name"
+                    value={miscForm.name}
+                    onChange={e => setMiscForm({...miscForm, name: e.target.value})}
+                    className="flex-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-white"
+                  />
+                  <input 
+                    type="number"
+                    placeholder="Price"
+                    value={miscForm.price}
+                    onChange={e => setMiscForm({...miscForm, price: e.target.value})}
+                    className="w-24 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-white"
+                  />
+                  <button 
+                    onClick={handleAddMiscCharge}
+                    className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
+                  >
+                    <PlusCircle className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Misc Charges List */}
+                {checkoutModal.miscCharges.length > 0 && (
+                  <div className="space-y-2">
+                    {checkoutModal.miscCharges.map((misc, idx) => (
+                      <div key={idx} className="flex items-center justify-between bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-xl border border-zinc-100 dark:border-zinc-700/50">
+                        <div>
+                          <div className="text-sm font-medium text-zinc-900 dark:text-white">{misc.name}</div>
+                          <div className="text-xs text-blue-500 font-bold">{formatCurrency(misc.price)}</div>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveMiscCharge(idx)}
+                          className="p-2 text-zinc-400 hover:text-red-500 transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -709,41 +791,46 @@ export default function CashierCheckout({
                       step="0.01"
                       min="0"
                       value={checkoutModal.cashReceived || ''}
-                      onChange={handleCashReceivedChange}
+                      readOnly
                       placeholder="0.00"
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white text-xl font-semibold placeholder-zinc-500 focus:outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/50"
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-4 py-3 text-white text-xl font-semibold placeholder-zinc-500 focus:outline-none cursor-not-allowed opacity-70"
                     />
                   </div>
 
                   {/* Quick Cash Buttons */}
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                    {[1, 5, 10, 20, 50, 100].map((amt) => (
-                      <button
-                        key={amt}
-                        type="button"
-                        onClick={() => setCheckoutModal(prev => ({
-                          ...prev,
-                          cashReceived: (prev.cashReceived || 0) + amt,
-                          cashDenominations: {
-                            ...prev.cashDenominations,
-                            [amt]: (prev.cashDenominations[amt] || 0) + 1
-                          }
-                        }))}
-                        className="py-2.5 bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-300 font-bold hover:bg-zinc-700 hover:text-white active:scale-95 transition-all text-xs"
-                      >
-                        +RM{amt}
-                      </button>
-                    ))}
+                    {[1, 5, 10, 20, 50, 100].map((amt) => {
+                      const count = checkoutModal.cashDenominations[amt] || 0
+                      return (
+                        <button
+                          key={amt}
+                          type="button"
+                          onClick={() => setCheckoutModal(prev => ({
+                            ...prev,
+                            cashReceived: (prev.cashReceived || 0) + amt,
+                            cashDenominations: {
+                              ...prev.cashDenominations,
+                              [amt]: (prev.cashDenominations[amt] || 0) + 1
+                            }
+                          }))}
+                          className={`relative py-2.5 rounded-xl border font-bold active:scale-95 transition-all text-xs ${
+                            count > 0 
+                              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' 
+                              : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+                          }`}
+                        >
+                          +RM{amt}
+                          {count > 0 && (
+                            <span className="absolute -top-1 -right-1 w-5 h-5 bg-zinc-900 text-white text-[10px] rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900 shadow-sm">
+                              {count}
+                            </span>
+                          )}
+                        </button>
+                      )
+                    })}
                   </div>
 
                   <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setCheckoutModal(prev => ({ ...prev, cashReceived: totalWithAddons }))}
-                      className="flex-1 py-3 bg-blue-600/20 border border-blue-500/50 text-blue-400 rounded-xl font-bold hover:bg-blue-600/30 transition-all text-xs uppercase tracking-wider"
-                    >
-                      {t('payment.exactAmount' as any)}
-                    </button>
                     <button
                       type="button"
                       onClick={() => setCheckoutModal(prev => ({ 
@@ -752,7 +839,7 @@ export default function CashierCheckout({
                         cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
                         changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }
                       }))}
-                      className="px-6 py-3 bg-zinc-800 border border-zinc-700 text-zinc-500 rounded-xl font-bold hover:bg-zinc-700 transition-all text-xs uppercase tracking-wider"
+                      className="w-full py-3 bg-zinc-800 border border-zinc-700 text-zinc-500 rounded-xl font-bold hover:bg-zinc-700 transition-all text-xs uppercase tracking-wider"
                     >
                       {t('payment.clearCash' as any)}
                     </button>

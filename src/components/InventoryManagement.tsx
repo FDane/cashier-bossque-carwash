@@ -24,11 +24,21 @@ import {
   Hash,
   PlusCircle
 } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 
 export default function InventoryManagement() {
   const { t } = useLanguage()
   const [items, setItems] = useState<any[]>([])
-  const [newItem, setNewItem] = useState({ name: '', category: '', quantity: 0, lowStockThreshold: 5 })
+  const [newItem, setNewItem] = useState({ 
+    name: '', 
+    category: '', 
+    quantity: 0, 
+    reorderLevel: 3,
+    cost: 0,
+    price: 0,
+    supplier: '',
+    unit: ''
+  })
   const [lowStock, setLowStock] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(false)
@@ -60,7 +70,16 @@ export default function InventoryManagement() {
     setLoading(true)
     try {
       await addInventoryItem(newItem)
-      setNewItem({ name: '', category: '', quantity: 0, lowStockThreshold: 5 })
+      setNewItem({ 
+        name: '', 
+        category: '', 
+        quantity: 0, 
+        reorderLevel: 3,
+        cost: 0,
+        price: 0,
+        supplier: '',
+        unit: ''
+      })
       showToast.success(t('inventory.addSuccess' as any))
     } catch {
       showToast.error(t('common.error' as any))
@@ -119,7 +138,7 @@ export default function InventoryManagement() {
           <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{t('inventory.addTitle' as any)}</h3>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <div className="relative md:col-span-2">
             <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
             <input 
@@ -129,14 +148,16 @@ export default function InventoryManagement() {
               className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl pl-12 pr-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
             />
           </div>
-          <div className="relative">
-            <Package className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-            <input 
-              placeholder={t('inventory.category' as any)} 
-              value={newItem.category} 
+          <div>
+            <select 
+              value={newItem.category}
               onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
-              className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl pl-12 pr-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
-            />
+              className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all font-bold"
+            >
+              <option value="">{t('inventory.category' as any)}</option>
+              <option value="retailItem">Retail Item</option>
+              <option value="supplies">Supplies</option>
+            </select>
           </div>
           <div className="relative">
             <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
@@ -146,6 +167,51 @@ export default function InventoryManagement() {
               value={newItem.quantity || ''} 
               onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value || '0') })}
               className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl pl-12 pr-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+            />
+          </div>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">RM</span>
+            <input 
+              type="number"
+              placeholder={t('inventory.cost' as any)} 
+              value={newItem.cost || ''} 
+              onChange={(e) => setNewItem({ ...newItem, cost: parseFloat(e.target.value || '0') })}
+              className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl pl-12 pr-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+            />
+          </div>
+          <div className="relative">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-400">RM</span>
+            <input 
+              type="number"
+              placeholder={t('inventory.price' as any)} 
+              value={newItem.price || ''} 
+              onChange={(e) => setNewItem({ ...newItem, price: parseFloat(e.target.value || '0') })}
+              className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl pl-12 pr-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+            />
+          </div>
+          <div className="relative">
+            <input 
+              placeholder={t('inventory.supplier' as any)} 
+              value={newItem.supplier} 
+              onChange={(e) => setNewItem({ ...newItem, supplier: e.target.value })}
+              className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+            />
+          </div>
+          <div className="relative">
+            <input 
+              placeholder={t('inventory.unit' as any)} 
+              value={newItem.unit} 
+              onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
+              className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+            />
+          </div>
+          <div className="relative">
+            <input 
+              type="number"
+              placeholder={t('inventory.reorderLevel' as any)} 
+              value={newItem.reorderLevel || ''} 
+              onChange={(e) => setNewItem({ ...newItem, reorderLevel: parseInt(e.target.value || '0') })}
+              className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3.5 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
             />
           </div>
         </div>
@@ -195,7 +261,8 @@ export default function InventoryManagement() {
             <thead>
               <tr>
                 <th className="text-left px-8 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('inventory.name' as any)}</th>
-                <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('inventory.category' as any)}</th>
+                <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('inventory.category' as any)} / {t('inventory.supplier' as any)}</th>
+                <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('inventory.price' as any)}</th>
                 <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('inventory.quantity' as any)}</th>
                 <th className="text-right px-8 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.actions' as any)}</th>
               </tr>
@@ -203,16 +270,26 @@ export default function InventoryManagement() {
             <tbody>
               {filteredItems.map((it) => (
                 <tr key={it.id} className="group bg-zinc-50/50 dark:bg-zinc-800/30 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors">
-                  <td className="py-5 px-8 rounded-l-2xl font-bold text-zinc-900 dark:text-white">{it.name}</td>
+                  <td className="py-5 px-8 rounded-l-2xl">
+                    <div className="font-bold text-zinc-900 dark:text-white">{it.name}</div>
+                    <div className="text-[10px] text-zinc-500 font-medium">{it.unit || 'No unit'}</div>
+                  </td>
                   <td className="py-5 px-4">
-                    <span className="px-3 py-1 bg-zinc-200 dark:bg-zinc-700 rounded-full text-[10px] font-black uppercase text-zinc-600 dark:text-zinc-400">
-                      {it.category}
-                    </span>
+                    <div className="flex flex-col gap-1">
+                      <span className="w-fit px-2 py-0.5 bg-zinc-200 dark:bg-zinc-700 rounded text-[10px] font-black uppercase text-zinc-600 dark:text-zinc-400">
+                        {it.category}
+                      </span>
+                      <span className="text-[10px] text-zinc-400 font-bold uppercase">{it.supplier}</span>
+                    </div>
+                  </td>
+                  <td className="py-5 px-4">
+                    <div className="text-sm font-bold text-zinc-900 dark:text-white">{formatCurrency(it.price)}</div>
+                    <div className="text-[10px] text-zinc-500">{t('inventory.cost' as any)}: {formatCurrency(it.cost)}</div>
                   </td>
                   <td className="py-5 px-4 font-mono font-bold text-lg text-zinc-900 dark:text-white">
                     <div className="flex items-center gap-3">
                       {it.quantity}
-                      {(it.quantity <= (it.lowStockThreshold ?? 5)) && (
+                      {(it.quantity <= (it.reorderLevel ?? 3)) && (
                         <AlertTriangle className="w-4 h-4 text-amber-500" />
                       )}
                     </div>
