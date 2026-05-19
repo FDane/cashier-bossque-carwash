@@ -51,12 +51,6 @@ export default function StaffManagement() {
       const cleanup = await listenToTodayAttendance((data) => {
         if (!isMounted) return
         
-        // Logging attendance with Document ID and resolved Staff Name
-        console.log('Attendance Sync [Doc ID]:', data.map(r => ({ 
-          docId: r.id, 
-          staffName: map[r.staffId]?.name || map[r.staffId]?.displayName || 'Unknown', // Prioritize 'name', then 'displayName'
-          clockIn: r.clockInTime 
-        })))
         
         setRows(data)
         const sel: Record<string, boolean> = {}
