@@ -134,7 +134,7 @@ export default function CustomerSection() {
         })
         setPastOrders(flattened)
       }
-    } catch (err) {
+    } catch {
       showToast.error(t('common.error' as any))
     } finally {
       setSearching(false)

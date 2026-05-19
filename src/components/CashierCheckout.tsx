@@ -17,6 +17,7 @@ import {
   Trash2,
   Image as ImageIcon,
   PlusCircle,
+  User,
 } from 'lucide-react'
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
@@ -27,12 +28,15 @@ import {
   updateTransaction, 
   uploadImageToFirebase,
   listenToFullPriceBook,
-  listenToRetailItems
+  listenToRetailItems,
+  getCustomerByPlate,
 } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency, formatTime } from '@/lib/utils'
 
 import { resizeImage } from '@/lib/imageUtils' // Import image utility
+import { useRouter } from 'next/navigation'
+
 interface CashierCheckoutProps {
   pendingTransactions: Transaction[]
   loading: boolean
@@ -82,12 +86,43 @@ export default function CashierCheckout({
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [checkoutImagePreviewUrl, setCheckoutImagePreviewUrl] = useState<string | null>(null)
 
+  const router = useRouter()
+
   // State for Manual/Misc charge form
   const [miscForm, setMiscForm] = useState({ name: '', price: '' })
 
   // State for viewing image in a modal
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null)
   const checkoutImageInputRef = React.useRef<HTMLInputElement>(null)
+
+  // State to store customer data for each plate number
+  const [transactionCustomers, setTransactionCustomers] = useState<Record<string, any>>({});
+
+  // Effect to fetch customer data for pending transactions
+  useEffect(() => {
+    const fetchCustomersForTransactions = async () => {
+      const uniquePlates = Array.from(new Set(pendingTransactions.map(t => t.plateNumber)));
+      const customerPromises = uniquePlates.map(async (plate) => {
+        const customer = await getCustomerByPlate(plate);
+        return { plate, customer };
+      });
+
+      const results = await Promise.all(customerPromises);
+      const customerMap: Record<string, any> = {};
+      results.forEach(({ plate, customer }) => {
+        if (customer) {
+          customerMap[plate] = customer;
+        }
+      });
+      setTransactionCustomers(customerMap);
+    };
+
+    if (pendingTransactions.length > 0) {
+      fetchCustomersForTransactions();
+    } else {
+      setTransactionCustomers({}); // Clear if no pending transactions
+    }
+  }, [pendingTransactions]);
 
   useEffect(() => {
     const unsubPrice = listenToFullPriceBook((items) => {
@@ -454,6 +489,9 @@ export default function CashierCheckout({
       {!transactionsLoading && filteredTransactions.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
           {filteredTransactions.map((transaction) => (
+            // Get customer for the current transaction's plate
+            // eslint-disable-next-line react-hooks/rules-of-hooks
+            // const customerForPlate = useMemo(() => transactionCustomers[transaction.plateNumber], [transactionCustomers, transaction.plateNumber]);
             <div
               key={transaction.id}
               className="relative text-left group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500 rounded-2xl p-5 sm:p-7 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 transform hover:-translate-y-1"
@@ -498,6 +536,11 @@ export default function CashierCheckout({
                   <div className="text-zinc-900 dark:text-white text-2xl sm:text-3xl font-bold font-mono tracking-wider">
                     {transaction.plateNumber}
                   </div>
+                  {transactionCustomers[transaction.plateNumber] && (
+                    <div className="flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                      <User className="w-3.5 h-3.5" /> {transactionCustomers[transaction.plateNumber].name}
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -570,12 +613,30 @@ export default function CashierCheckout({
               {/* Transaction Info */}
               <div className="bg-blue-500/5 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-2xl p-5 sm:p-6">
                 <div className="space-y-3">
-                  <div>
-                    <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
-                      {t('payment.plateNumber' as any)}
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
+                        {t('payment.plateNumber' as any)}
+                      </div>
+                      <div className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white font-mono tracking-widest leading-none">
+                        {checkoutModal.transaction.plateNumber}
+                      </div>
                     </div>
-                    <div className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white font-mono tracking-widest">
-                      {checkoutModal.transaction.plateNumber}
+                    <div className="mt-1">
+                      {transactionCustomers[checkoutModal.transaction.plateNumber] ? (
+                        <div className="flex items-center gap-1.5 text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-600/10 px-3 py-1.5 rounded-xl">
+                          <User className="w-4 h-4" />
+                          {transactionCustomers[checkoutModal.transaction.plateNumber].name}
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => router.push('/customers')}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-500 hover:text-blue-600 hover:border-blue-500 transition-all"
+                        >
+                          <Plus className="w-3 h-3" />
+                          {t('common.add' as any)} {t('customer.name' as any)}
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div>

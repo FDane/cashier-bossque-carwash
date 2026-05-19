@@ -436,13 +436,21 @@ export async function clockOutAllToday(): Promise<void> {
  * Records a staff advance, updates cash drawer, attendance, and daily salaries
  */
 export async function recordStaffAdvance(
-staffId: string, staffName: string, amount: number, denominations: Record<string, number> = {}, _p0: any): Promise<void> {
+  staffId: string,
+  staffName: string,
+  amount: number,
+  attendanceId: string,
+  denominations: Record<string, number> = {}
+): Promise<void> {
   const today = todayDateString()
   
   // 1. Add to cash adjustments (Drawer Expense)
   await addCashAdjustment('EXPENSE', amount, `Staff Advance: ${staffName}`, denominations)
   
-  // 2. Update Daily Salaries record
+  // 2. Update attendance record
+  await addMoneyAdvanceForAttendance(attendanceId, amount)
+  
+  // 3. Update Daily Salaries record
   const salaryId = `${staffId}_${today}`
   const salaryRef = doc(db, DAILY_SALARIES_COLLECTION, salaryId)
   await setDoc(salaryRef, { staffId, date: today, advancesDeducted: increment(amount) }, { merge: true })
