@@ -63,6 +63,7 @@ interface CheckoutModalData {
   miscCharges: { name: string; price: number }[]
   cashDenominations: Record<number, number>
   changeDenominations: Record<number, number>
+  notes: string
 }
 
 export default function CashierCheckout({
@@ -81,6 +82,7 @@ export default function CashierCheckout({
     miscCharges: [],
     cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
     changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+    notes: '',
   })
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
   const [processingId, setProcessingId] = useState<string | null>(null)
@@ -136,12 +138,20 @@ export default function CashierCheckout({
 
   // Local filtering: No extra Firebase cost
   const filteredTransactions = useMemo(() => {
-    if (!searchQuery.trim()) return pendingTransactions
-    const query = searchQuery.toLowerCase()
-    return pendingTransactions.filter((t) =>
-      t.plateNumber.toLowerCase().includes(query)
+    let result = [...pendingTransactions]
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase()
+      result = result.filter((t) => {
+        const plateMatch = t.plateNumber.toLowerCase().includes(query)
+        const customerMatch = transactionCustomers[t.plateNumber]?.name?.toLowerCase().includes(query)
+        return plateMatch || customerMatch
+      })
+    }
+    // Sort: oldest transaction on top (ascending order of checkInTime)
+    return result.sort((a, b) => 
+      new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
     )
-  }, [pendingTransactions, searchQuery])
+  }, [pendingTransactions, searchQuery, transactionCustomers])
 
   // Calculate total with addons
   const totalWithAddons = useMemo(() => {
@@ -179,6 +189,7 @@ export default function CashierCheckout({
       miscCharges: [],
       cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
       changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+      notes: (transaction as any).notes || '',
     })
   }
 
@@ -356,6 +367,11 @@ export default function CashierCheckout({
     setProcessingId(checkoutModal.transaction.id)
 
     try {
+      // Save notes if changed
+      if (checkoutModal.notes !== ((checkoutModal.transaction as any).notes || '')) {
+        await updateTransaction(checkoutModal.transaction.id, { notes: checkoutModal.notes })
+      }
+
       // Merge retail addons and misc charges for the database
       const allAddons = [
         ...checkoutModal.selectedAddons,
@@ -398,6 +414,7 @@ export default function CashierCheckout({
         miscCharges: [],
         cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
         changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+        notes: '',
       })
     } catch (error) {
       console.error('Error processing checkout:', error)
@@ -416,6 +433,7 @@ export default function CashierCheckout({
       miscCharges: [],
       cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
       changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+      notes: '',
     })
   }
 
@@ -576,6 +594,13 @@ export default function CashierCheckout({
                   </div>
                 </div>
 
+                {/* Display Notes if any */}
+                {(transaction as any).notes && (
+                  <div className="mb-4 p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl text-xs text-amber-600 dark:text-amber-400 italic">
+                    &quot;{(transaction as any).notes}&quot;
+                  </div>
+                )}
+
                 {/* Time & Price */}
                 <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 flex justify-between items-end">
                   <div className="text-xs text-zinc-500 font-medium">
@@ -700,6 +725,20 @@ export default function CashierCheckout({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Notes Section */}
+              <div className="space-y-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
+                <label className="block text-sm font-semibold text-zinc-900 dark:text-zinc-300">
+                  {t('common.notes' as any) || 'Notes'}
+                </label>
+                <textarea
+                  className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-zinc-900 dark:text-white"
+                  rows={2}
+                  value={checkoutModal.notes}
+                  onChange={(e) => setCheckoutModal({...checkoutModal, notes: e.target.value})}
+                  placeholder={t('common.notesPlaceholder' as any) || 'Add notes for this transaction...'}
+                />
               </div>
 
               {/* Add-ons Section */}
@@ -1114,6 +1153,17 @@ export default function CashierCheckout({
                       </button>
                     ))}
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">{t('common.notes' as any) || 'Notes'}</label>
+                  <textarea
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm"
+                    rows={3}
+                    value={(editingTransaction as any).notes || ''}
+                    onChange={(e) => setEditingTransaction({...editingTransaction, notes: e.target.value})}
+                    placeholder={t('common.notesPlaceholder' as any) || 'Add any internal notes here...'}
+                  />
                 </div>
 
                 <div className="pt-4 border-t border-zinc-100 dark:border-zinc-800">

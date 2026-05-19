@@ -46,7 +46,7 @@ export const translations = {
 
     // Phase 2: Cashier
     'cashier.title': 'Cashier Counter Checkout',
-    'cashier.search': 'Search Plate Number...',
+    'cashier.search': 'Search Plate Number or Customer Name...',
     'cashier.queue': 'Active Queue',
     'cashier.queueCount': 'Cars waiting:',
     'cashier.noResults': 'No vehicles found',
@@ -180,6 +180,8 @@ export const translations = {
     'common.warning': 'Warning',
     'common.delete': 'Delete',
 'common.edit': 'Edit',
+'common.notes': 'Notes',
+    'common.notesPlaceholder': 'Add any internal notes here...',
 
     // Date & Time
     'time.justNow': 'Just now',
@@ -245,7 +247,7 @@ export const translations = {
 
     // Phase 2: Cashier
     'cashier.title': 'Kaunter Bayaran Kenderaan',
-    'cashier.search': 'Cari No Plat Kenderaan...',
+    'cashier.search': 'Cari No Plat Kenderaan atau Nama Pelanggan...',
     'cashier.queue': 'Kenderaan belum bayar',
     'cashier.queueCount': 'Kereta menunggu:',
     'cashier.noResults': 'Tiada kenderaan dijumpai',
@@ -380,6 +382,8 @@ export const translations = {
     'common.warning': 'Amaran',
     'common.delete': 'Padam',
     'common.edit': 'Kemaskini',
+    'common.notes': 'Catatan',
+    'common.notesPlaceholder': 'Tambah nota dalaman di sini...',
 
     // Date & Time
     'time.justNow': 'Baru sahaja',
