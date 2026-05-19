@@ -401,8 +401,22 @@ export async function listenToTodayAttendance(callback: (rows: any[]) => void) {
 }
 
 export async function clockOutAttendance(attendanceId: string): Promise<void> {
-  const ref = doc(db, ATTENDANCE_COLLECTION, attendanceId)
-  await updateDoc(ref, { clockOutTime: serverTimestamp() })
+  const attendanceRef = doc(db, ATTENDANCE_COLLECTION, attendanceId);
+  const attendanceSnap = await getDoc(attendanceRef);
+
+  if (!attendanceSnap.exists()) {
+    console.warn(`Attendance record with ID ${attendanceId} not found.`);
+    return;
+  }
+
+  const attendanceData = attendanceSnap.data();
+  const staffId = attendanceData.staffId;
+  const date = attendanceData.date; // This is the 'today' string for daily_salaries
+
+  await updateDoc(attendanceRef, { clockOutTime: serverTimestamp() });
+
+  const salaryRef = doc(db, DAILY_SALARIES_COLLECTION, `${staffId}_${date}`);
+  await updateDoc(salaryRef, { clockOutTime: serverTimestamp() });
 }
 
 export async function clockOutAllToday(): Promise<void> {
@@ -561,25 +575,46 @@ export async function getTransactionsByPlate(plateNumber: string) {
 }
 
 export async function getPastTransactions(
-  limitCount: number,
-  _plate?: string,
+  limitCount: number | undefined,
+  plate?: string,
   afterDoc?: any,
   beforeDoc?: any,
   date?: string
 ) {
   const colRef = collection(db, TRANSACTIONS_COLLECTION)
-  let q = query(colRef, orderBy('checkInTime', 'desc'))
-  q = query(q, where('status', '==', 'COMPLETED'))
+  // Start with a base query for completed transactions
+  let q = query(colRef, where('status', '==', 'COMPLETED'))
 
-  if (date) {
-    const start = new Date(`${date}T00:00:00+08:00`)
-    const end = new Date(`${date}T23:59:59+08:00`)
-    q = query(q, where('checkInTime', '>=', start), where('checkInTime', '<=', end))
+  if (plate) {
+    // For global plate search, we use a prefix query
+    // Firestore requires range filters to be ordered by that same field first
+    const searchStr = plate.toUpperCase()
+    q = query(
+      q,
+      where('plateNumber', '>=', searchStr),
+      where('plateNumber', '<=', searchStr + '\uf8ff'),
+      orderBy('plateNumber')
+    )
+  } else {
+    // Default sorting by time for Date searches or browsing
+    q = query(q, orderBy('checkInTime', 'desc'))
+
+    if (date) {
+      const start = new Date(`${date}T00:00:00+08:00`)
+      const end = new Date(`${date}T23:59:59+08:00`)
+      q = query(q, where('checkInTime', '>=', start), where('checkInTime', '<=', end))
+    }
   }
 
-  if (afterDoc) q = query(q, startAfter(afterDoc), limit(limitCount))
-  else if (beforeDoc) q = query(q, endBefore(beforeDoc), limitToLast(limitCount))
-  else q = query(q, limit(limitCount))
+  // Apply cursors
+  if (afterDoc) q = query(q, startAfter(afterDoc))
+  if (beforeDoc) q = query(q, endBefore(beforeDoc))
+
+  // Only apply limit if limitCount is defined
+  if (limitCount !== undefined) {
+    if (beforeDoc) q = query(q, limitToLast(limitCount))
+    else q = query(q, limit(limitCount))
+  }
 
   return await getDocs(q)
 }

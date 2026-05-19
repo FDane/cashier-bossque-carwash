@@ -89,6 +89,8 @@ export const translations = {
     // Past Cars
     'pastCars.title': 'Past Car Records',
     'pastCars.search': 'Search Plate Records',
+    'pastCars.byDate': 'Search by Date',
+    'pastCars.global': 'Global Plate Search',
 
     // Price Book
     'priceBook.title': 'Price List Management',
@@ -176,6 +178,8 @@ export const translations = {
     'common.error': 'Error',
     'common.success': 'Success',
     'common.warning': 'Warning',
+    'common.delete': 'Delete',
+'common.edit': 'Edit',
 
     // Date & Time
     'time.justNow': 'Just now',
@@ -284,6 +288,8 @@ export const translations = {
     // Past Cars
     'pastCars.title': 'Rekod Kenderaan Lama',
     'pastCars.search': 'Cari Rekod No Plat',
+    'pastCars.byDate': 'Cari mengikut Tarikh',
+    'pastCars.global': 'Cari No Plat (Global)',
 
     // Price Book
     'priceBook.title': 'Pengurusan Senarai Harga',
@@ -372,6 +378,8 @@ export const translations = {
     'common.error': 'Ralat',
     'common.success': 'Berjaya',
     'common.warning': 'Amaran',
+    'common.delete': 'Padam',
+    'common.edit': 'Kemaskini',
 
     // Date & Time
     'time.justNow': 'Baru sahaja',

@@ -8,14 +8,12 @@ import {
   User, 
   Car, 
   Loader2,
-  ArrowRight,
   UserCircle, 
   X,
   PlusCircle,
   Trash2,
   Plus,
   Edit,
-  Image as ImageIcon
 } from 'lucide-react'
 import { 
   addCustomer, 
@@ -354,7 +352,7 @@ export default function CustomerSection() {
               <button 
                 onClick={() => handleDeleteCustomer(selectedCustomer.id)} 
                 className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-lg shadow-red-500/20 transition-all active:scale-95 text-sm"
-              ><Trash2 className="w-4 h-4" /> {t('staff.actions' as any)}</button>
+              ><Trash2 className="w-4 h-4" /> {t('common.delete' as any)}</button>
             </div>
             <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl p-6 sm:p-8 shadow-premium-lg">
               <div className="flex items-center gap-4 mb-6">
