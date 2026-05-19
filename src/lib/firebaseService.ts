@@ -621,15 +621,34 @@ export async function deleteCashAdjustment(id: string) {
 /**
  * Customer helpers
  */
-export async function addCustomer(customer: { name: string; phone?: string; plate?: string }) {
+export async function addCustomer(customer: { name: string; phone?: string; plates?: string[] }) {
   const data: any = {
     name: customer.name,
     phone: customer.phone || null,
-    plates: customer.plate ? [customer.plate.toUpperCase()] : [],
+    plates: customer.plates ? customer.plates.map(p => p.toUpperCase()) : [],
     createdAt: serverTimestamp(),
   }
   const docRef = await addDoc(collection(db, CUSTOMERS_COLLECTION), data)
   return docRef.id
+}
+
+export async function updateCustomer(customerId: string, updates: { name?: string; phone?: string; plates?: string[] }) {
+  const customerRef = doc(db, CUSTOMERS_COLLECTION, customerId)
+  const data: any = { ...updates }
+  if (updates.plates) data.plates = updates.plates.map(p => p.toUpperCase())
+  await updateDoc(customerRef, data)
+}
+
+export async function deleteCustomer(customerId: string) {
+  await deleteDoc(doc(db, CUSTOMERS_COLLECTION, customerId))
+}
+
+export function listenToCustomers(callback: (customers: any[]) => void): Unsubscribe {
+  return onSnapshot(collection(db, CUSTOMERS_COLLECTION), (snapshot) => {
+    const customers: any[] = []
+    snapshot.forEach((d) => customers.push({ id: d.id, ...d.data() }))
+    callback(customers)
+  })
 }
 
 export async function getCustomerByPlate(plate: string) {
