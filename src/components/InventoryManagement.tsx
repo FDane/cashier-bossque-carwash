@@ -22,7 +22,8 @@ import {
   Loader2,
   Tag,
   Hash,
-  PlusCircle
+  PlusCircle,
+  X
 } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 
@@ -42,6 +43,7 @@ export default function InventoryManagement() {
   const [lowStock, setLowStock] = useState<any[]>([])
   const [searchTerm, setSearchTerm] = useState('')
   const [loading, setLoading] = useState(false)
+  const [editingItem, setEditingItem] = useState<any | null>(null)
 
   useEffect(() => {
     const unsub = listenToInventory((rows) => setItems(rows))
@@ -102,10 +104,22 @@ export default function InventoryManagement() {
     if (item) showToast.warning(`${item.name} low on stock (${item.quantity})`)
   }
 
-  async function handleUpdate(id: string, field: string, value: any) {
-    await updateInventoryItem(id, { [field]: value })
-    const low = await getLowStockItems()
-    setLowStock(low)
+  async function handleSaveEdit() {
+    if (!editingItem || !editingItem.name) {
+      showToast.error(t('common.error' as any))
+      return
+    }
+    setLoading(true)
+    try {
+      const { id, ...data } = editingItem
+      await updateInventoryItem(id, data)
+      setEditingItem(null)
+      showToast.success(t('common.success' as any))
+    } catch {
+      showToast.error(t('common.error' as any))
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function handleDelete(id: string) {
@@ -302,7 +316,7 @@ export default function InventoryManagement() {
                       <button onClick={() => handleDec(it.id)} className="p-2 text-zinc-400 hover:text-amber-500 hover:bg-amber-500/10 rounded-lg transition-all">
                         <Minus className="w-4 h-4" />
                       </button>
-                      <button onClick={() => handleUpdate(it.id, 'category', prompt('Category', it.category) || it.category)} className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all">
+                      <button onClick={() => setEditingItem({ ...it })} className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-all">
                         <Edit className="w-4 h-4" />
                       </button>
                       <button onClick={() => handleDelete(it.id)} className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-all">
@@ -316,6 +330,108 @@ export default function InventoryManagement() {
           </table>
         </div>
       </div>
+
+      {/* Edit Item Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setEditingItem(null)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                <Edit className="w-5 h-5 text-blue-500" />
+                {t('inventory.editTitle' as any)}
+              </h3>
+              <button onClick={() => setEditingItem(null)} className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors">
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="md:col-span-2">
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">{t('inventory.name' as any)}</label>
+                  <input 
+                    value={editingItem.name} 
+                    onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">{t('inventory.category' as any)}</label>
+                  <select 
+                    value={editingItem.category}
+                    onChange={(e) => setEditingItem({ ...editingItem, category: e.target.value })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all font-bold"
+                  >
+                    <option value="retailItem">Retail Item</option>
+                    <option value="supplies">Supplies</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">{t('inventory.unit' as any)}</label>
+                  <input 
+                    placeholder="e.g. Bottle, Pcs, Box"
+                    value={editingItem.unit} 
+                    onChange={(e) => setEditingItem({ ...editingItem, unit: e.target.value })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">{t('inventory.cost' as any)}</label>
+                  <input 
+                    type="number"
+                    value={editingItem.cost} 
+                    onChange={(e) => setEditingItem({ ...editingItem, cost: parseFloat(e.target.value || '0') })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">{t('inventory.price' as any)}</label>
+                  <input 
+                    type="number"
+                    value={editingItem.price} 
+                    onChange={(e) => setEditingItem({ ...editingItem, price: parseFloat(e.target.value || '0') })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">{t('inventory.quantity' as any)}</label>
+                  <input 
+                    type="number"
+                    value={editingItem.quantity} 
+                    onChange={(e) => setEditingItem({ ...editingItem, quantity: parseInt(e.target.value || '0') })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">{t('inventory.reorderLevel' as any)}</label>
+                  <input 
+                    type="number"
+                    value={editingItem.reorderLevel} 
+                    onChange={(e) => setEditingItem({ ...editingItem, reorderLevel: parseInt(e.target.value || '0') })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1.5 block">{t('inventory.supplier' as any)}</label>
+                  <input 
+                    value={editingItem.supplier} 
+                    onChange={(e) => setEditingItem({ ...editingItem, supplier: e.target.value })}
+                    className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl px-4 py-3 focus:ring-2 focus:ring-blue-500/50 outline-none transition-all" 
+                  />
+                </div>
+              </div>
+              <button 
+                className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2 disabled:opacity-50 mt-4"
+                onClick={handleSaveEdit}
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Plus className="w-5 h-5 rotate-45" />}
+                {t('common.save' as any)}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

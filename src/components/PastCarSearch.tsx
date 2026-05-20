@@ -29,7 +29,17 @@ export default function PastCarSearch() {
   const [firstDoc, setFirstDoc] = useState<any>(null)
   const [lastDoc, setLastDoc] = useState<any>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null)
+  const [selectedTransaction, setSelectedTransaction] = useState<any>(null)
+
+  const calculateTotal = (r: any) => {
+    let total = r.computedPrice || 0;
+    if (Array.isArray(r.addons)) {
+      r.addons.forEach((addon: any) => {
+        total += (addon.price || 0) * (addon.quantity || 1);
+      });
+    }
+    return total;
+  };
 
   useEffect(() => {
     if (searchMode === 'DATE') { // For DATE mode, perform regular paginated search
@@ -205,14 +215,17 @@ export default function PastCarSearch() {
               </thead>
               <tbody>
                 {filteredResults.map((r) => (
-                  <tr key={r.id} className="group bg-zinc-50/50 dark:bg-zinc-800/30 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors">
+                  <tr 
+                    key={r.id} 
+                    onClick={() => setSelectedTransaction(r)}
+                    className="group bg-zinc-50/50 dark:bg-zinc-800/30 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
+                  >
                     <td className="py-5 px-8 rounded-l-2xl">
                       {r.imageUrl ? (
                         <img 
                           src={r.imageUrl} 
                           alt="" 
-                          className="w-12 h-12 rounded-xl object-cover shadow-sm cursor-pointer hover:scale-105 transition-transform" 
-                          onClick={() => setViewingImageUrl(r.imageUrl)}
+                          className="w-12 h-12 rounded-xl object-cover shadow-sm" 
                         />
                       ) : (
                         <div className="w-12 h-12 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
@@ -238,7 +251,7 @@ export default function PastCarSearch() {
                       </div>
                     </td>
                     <td className="py-5 px-4 font-bold text-zinc-900 dark:text-white">
-                      {formatCurrency(r.computedPrice)}
+                      {formatCurrency(calculateTotal(r))}
                     </td>
                     <td className="py-5 px-4">
                       {r.paymentMethod && (
@@ -308,21 +321,107 @@ export default function PastCarSearch() {
         )}
       </div>
 
-      {/* Image Viewer Modal */}
-      {viewingImageUrl && (
-        <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setViewingImageUrl(null)}>
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
+      {/* Transaction Detail Modal */}
+      {selectedTransaction && (
+        <div className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4" onClick={() => setSelectedTransaction(null)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-2xl max-h-[95vh] overflow-y-auto shadow-2xl animate-in fade-in zoom-in duration-200" onClick={e => e.stopPropagation()}>
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
-              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{t('intake.image' as any)}</h3>
+              <div>
+                <h3 className="text-2xl font-black text-zinc-900 dark:text-white leading-tight">
+                  {selectedTransaction.plateNumber}
+                </h3>
+                <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">
+                  {selectedTransaction.brand} {selectedTransaction.model}
+                </p>
+              </div>
               <button
-                onClick={() => setViewingImageUrl(null)}
+                onClick={() => setSelectedTransaction(null)}
                 className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
               >
                 <X className="w-6 h-6" />
               </button>
             </div>
-            <div className="p-4">
-              <img src={viewingImageUrl} alt="Vehicle" className="w-full h-auto rounded-xl shadow-lg" />
+            
+            <div className="p-6 sm:p-8 space-y-8">
+              {selectedTransaction.imageUrl && (
+                <div className="relative rounded-2xl overflow-hidden shadow-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 flex justify-center">
+                  <img 
+                    src={selectedTransaction.imageUrl} 
+                    alt="Vehicle" 
+                    className="w-full h-auto max-h-[500px] object-contain"
+                  />
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">{t('staff.checkIn' as any)}</p>
+                  <div className="flex flex-col text-zinc-900 dark:text-white">
+                    <span className="font-bold flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-blue-500" />
+                      {selectedTransaction.checkInTime?.toDate ? selectedTransaction.checkInTime.toDate().toLocaleDateString() : ''}
+                    </span>
+                    <span className="text-sm font-medium opacity-60 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-blue-500" />
+                      {selectedTransaction.checkInTime?.toDate ? selectedTransaction.checkInTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">{t('payment.paymentMethod' as any)}</p>
+                  <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                    selectedTransaction.paymentMethod === 'CASH' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-indigo-500/10 text-indigo-600'
+                  }`}>
+                    {selectedTransaction.paymentMethod || 'N/A'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">{t('intake.services' as any)}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {['exterior', 'interior', 'engine'].map((serviceKey) => (
+                      selectedTransaction.services?.[serviceKey] && (
+                        <span key={serviceKey} className="px-3 py-1.5 bg-blue-50 dark:bg-blue-500/5 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-xl border border-blue-100 dark:border-blue-500/10">
+                          {t(`intake.services.${serviceKey}` as any)}
+                        </span>
+                      )
+                    ))}
+                  </div>
+                </div>
+
+                {Array.isArray(selectedTransaction.addons) && selectedTransaction.addons.length > 0 && (
+                  <div>
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Add-ons</p>
+                    <div className="space-y-2">
+                      {selectedTransaction.addons.map((addon: any, idx: number) => (
+                        <div key={addon.id || idx} className="flex justify-between items-center p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-100 dark:border-zinc-800">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300 capitalize">{addon.name}</span>
+                            {(addon.quantity || 1) > 1 && (
+                              <span className="text-[10px] text-zinc-500 font-medium">
+                                {addon.quantity} × {formatCurrency(addon.price)}
+                              </span>
+                            )}
+                          </div>
+                          <span className="text-sm font-black text-zinc-900 dark:text-white">
+                            {formatCurrency((addon.price || 0) * (addon.quantity || 1))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-zinc-500 uppercase tracking-widest">{t('payment.total:' as any) || 'Total Amount'}</span>
+                  <span className="text-3xl font-black text-blue-600 dark:text-blue-400">
+                    {formatCurrency(calculateTotal(selectedTransaction))}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
         </div>
