@@ -13,8 +13,9 @@ import {
   Plus, 
   Minus, 
   X, 
-  Trash2, 
-  UserPlus 
+  Trash2,
+  UserPlus,
+  ArrowLeftRight
 } from 'lucide-react'
 import { listenToTodayAdjustments, addCashAdjustment, deleteCashAdjustment, getStaffList, listenToTodayAttendance, recordStaffAdvance } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
@@ -23,7 +24,9 @@ import { formatCurrency, getKLDateString } from '@/lib/utils'
 export default function Dashboard() {
   const { t } = useLanguage()
   const [isCheckoutExpanded, setIsCheckoutExpanded] = useState(false)
+  const [isCashDrawerOpen, setIsCashDrawerOpen] = useState(false)
   const [adjustments, setAdjustments] = useState<any[]>([])
+  const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [showAdjModal, setShowAdjModal] = useState<'EXPENSE' | 'ADDITION' | null>(null)
   const [showAdvanceModal, setShowAdvanceModal] = useState(false)
   const [staffMap, setStaffMap] = useState<Record<string, any>>({})
@@ -37,6 +40,10 @@ export default function Dashboard() {
     attendanceId: '', 
     amount: '',
     denominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } as Record<number, number>
+  })
+  const [exchangeForm, setExchangeForm] = useState({
+    outDenoms: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } as Record<number, number>,
+    inDenoms: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } as Record<number, number>
   })
   const [loading, setLoading] = useState(false)
 
@@ -69,7 +76,7 @@ export default function Dashboard() {
 
   // Prevent background scrolling when modals are open
   useEffect(() => {
-    if (showAdjModal || showAdvanceModal) {
+    if (showAdjModal || showAdvanceModal || isCashDrawerOpen || showExchangeModal) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
@@ -77,7 +84,7 @@ export default function Dashboard() {
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [showAdjModal, showAdvanceModal])
+  }, [showAdjModal, showAdvanceModal, isCashDrawerOpen, showExchangeModal])
 
   // Filter transactions to only include those completed today
   const todayCompleted = useMemo(() => {
@@ -175,6 +182,43 @@ export default function Dashboard() {
     }
   }
 
+  const exchangeTotals = useMemo(() => {
+    const totalOut = Object.entries(exchangeForm.outDenoms).reduce((sum, [b, c]) => sum + (parseInt(b) * c), 0)
+    const totalIn = Object.entries(exchangeForm.inDenoms).reduce((sum, [b, c]) => sum + (parseInt(b) * c), 0)
+    return { totalOut, totalIn }
+  }, [exchangeForm])
+
+  const handleAddExchange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const { totalOut, totalIn } = exchangeTotals
+    if (totalOut === 0 || totalOut !== totalIn) {
+      showToast.error(t('stats.error.match' as any))
+      return
+    }
+
+    setLoading(true)
+    try {
+      const combinedDenoms: Record<number, number> = {}
+      ;[1, 5, 10, 20, 50, 100].forEach(bill => {
+        const net = (exchangeForm.inDenoms[bill] || 0) - (exchangeForm.outDenoms[bill] || 0)
+        if (net !== 0) combinedDenoms[bill] = net
+      })
+
+      await addCashAdjustment('ADDITION', 0, `Exchanged RM${totalOut}`, combinedDenoms)
+      
+      showToast.success(t('common.success' as any))
+      setShowExchangeModal(false)
+      setExchangeForm({
+        outDenoms: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+        inDenoms: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }
+      })
+    } catch {
+      showToast.error(t('common.error' as any))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const handleAdvBillClick = (bill: number) => {
     setAdvForm(prev => {
       const newDenoms = { ...prev.denominations, [bill]: (prev.denominations[bill] || 0) + 1 }
@@ -219,7 +263,7 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-950 dark:text-white transition-colors duration-200">
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32 lg:pb-8">
         {/* Two-Phase Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Phase 1: Car Entry Intake (Left Column) */}
@@ -262,7 +306,15 @@ export default function Dashboard() {
         </div>
 
         {/* Cashier Box Breakdown */}
-        <div className="mt-12">
+        <div className={`mt-12 ${isCashDrawerOpen ? 'fixed inset-0 z-[90] bg-zinc-100 dark:bg-zinc-950 overflow-y-auto p-6 pt-20 lg:pt-0 lg:relative lg:inset-auto lg:bg-transparent lg:p-0 lg:block lg:mt-12' : 'hidden lg:block'}`}>
+          {isCashDrawerOpen && (
+            <button 
+              onClick={() => setIsCashDrawerOpen(false)}
+              className="lg:hidden absolute top-6 right-6 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-lg text-zinc-500 z-[100]"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          )}
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-emerald-500/10 rounded-lg">
               <Banknote className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
@@ -294,6 +346,12 @@ export default function Dashboard() {
                       className="px-3 py-1.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider active:scale-95"
                     >
                       <UserPlus className="w-3.5 h-3.5" /> {t('staff.addAdvance' as any)}
+                    </button>
+                    <button 
+                      onClick={() => setShowExchangeModal(true)}
+                      className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider active:scale-95 border border-zinc-300 dark:border-zinc-700"
+                    >
+                      <ArrowLeftRight className="w-3.5 h-3.5" /> {t('stats.exchange' as any)}
                     </button>
                   </div>
                 </div>
@@ -406,6 +464,33 @@ export default function Dashboard() {
         </div>
       </main>
 
+      {/* Mobile Floating Cash Drawer Bar */}
+      {!isCashDrawerOpen && (
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-[80] p-4 bg-gradient-to-t from-zinc-100 dark:from-zinc-950 via-zinc-100/80 dark:via-zinc-950/80 to-transparent pointer-events-none">
+          <button 
+            onClick={() => setIsCashDrawerOpen(true)}
+            className="w-full max-w-md mx-auto pointer-events-auto flex items-center justify-between bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-6 py-4 rounded-3xl shadow-2xl active:scale-[0.98] transition-all border border-white/10 dark:border-black/10 animate-in fade-in slide-in-from-bottom-10"
+          >
+            <div className="flex items-center gap-3">
+              <div className="bg-emerald-500/20 p-2 rounded-xl">
+                <Banknote className="w-5 h-5 text-emerald-500" />
+              </div>
+              <div className="text-left">
+                <span className="block text-[10px] font-black uppercase tracking-widest opacity-70 leading-none mb-1">
+                  {t('stats.cashDrawer' as any)}
+                </span>
+                <span className="block text-lg font-black leading-none">
+                  RM {cashBreakdown.grandTotal.toFixed(2)}
+                </span>
+              </div>
+            </div>
+            <div className="bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider">
+              {t('common.view' as any) || 'View'}
+            </div>
+          </button>
+        </div>
+      )}
+
       {/* Adjustment Modal */}
       {showAdjModal && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -495,6 +580,88 @@ export default function Dashboard() {
               >
                 {t('common.confirm' as any)}
               </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Cash Exchange Modal */}
+      {showExchangeModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <form onSubmit={handleAddExchange} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-2xl shadow-2xl animate-in zoom-in duration-200 my-auto">
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                <ArrowLeftRight className="w-5 h-5 text-blue-500" /> {t('stats.exchangeBills' as any)}
+              </h3>
+              <button type="button" onClick={() => setShowExchangeModal(false)} className="p-2 text-zinc-400 hover:text-white"><X /></button>
+            </div>
+            
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Giving Out */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <label className="text-xs font-black text-red-500 uppercase tracking-widest">{t('stats.givingOut' as any)}</label>
+                  <span className="text-lg font-black text-red-600">RM {exchangeTotals.totalOut}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 5, 10, 20, 50, 100].map((bill) => (
+                    <button
+                      key={bill}
+                      type="button"
+                      onClick={() => setExchangeForm(p => ({ ...p, outDenoms: { ...p.outDenoms, [bill]: (p.outDenoms[bill] || 0) + 1 } }))}
+                      className={`relative py-3 rounded-xl border-2 font-black transition-all active:scale-95 ${exchangeForm.outDenoms[bill] > 0 ? 'border-red-500/50 bg-red-500/5 text-red-600' : 'border-zinc-100 dark:border-zinc-800 text-zinc-400'}`}
+                    >
+                      RM{bill}
+                      {exchangeForm.outDenoms[bill] > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white text-[10px] rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">{exchangeForm.outDenoms[bill]}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Taking In */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-end">
+                  <label className="text-xs font-black text-emerald-500 uppercase tracking-widest">{t('stats.takingIn' as any)}</label>
+                  <span className="text-lg font-black text-emerald-600">RM {exchangeTotals.totalIn}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {[1, 5, 10, 20, 50, 100].map((bill) => (
+                    <button
+                      key={bill}
+                      type="button"
+                      onClick={() => setExchangeForm(p => ({ ...p, inDenoms: { ...p.inDenoms, [bill]: (p.inDenoms[bill] || 0) + 1 } }))}
+                      className={`relative py-3 rounded-xl border-2 font-black transition-all active:scale-95 ${exchangeForm.inDenoms[bill] > 0 ? 'border-emerald-500/50 bg-emerald-500/5 text-emerald-600' : 'border-zinc-100 dark:border-zinc-800 text-zinc-400'}`}
+                    >
+                      RM{bill}
+                      {exchangeForm.inDenoms[bill] > 0 && <span className="absolute -top-1 -right-1 w-5 h-5 bg-emerald-600 text-white text-[10px] rounded-full flex items-center justify-center border-2 border-white dark:border-zinc-900">{exchangeForm.inDenoms[bill]}</span>}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-zinc-50 dark:bg-zinc-800/50 flex flex-col gap-4">
+               <div className={`text-center p-3 rounded-xl text-xs font-bold ${exchangeTotals.totalOut === exchangeTotals.totalIn && exchangeTotals.totalOut > 0 ? 'bg-emerald-500/10 text-emerald-600' : 'bg-amber-500/10 text-amber-600'}`}>
+                  {exchangeTotals.totalOut === exchangeTotals.totalIn && exchangeTotals.totalOut > 0 
+                    ? t('stats.matchSuccess' as any) 
+                    : `${t('stats.difference' as any)} ${Math.abs(exchangeTotals.totalOut - exchangeTotals.totalIn).toFixed(2)}`}
+               </div>
+               <div className="flex gap-3">
+                <button 
+                  type="button" 
+                  onClick={() => setExchangeForm({ outDenoms: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }, inDenoms: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 } })} 
+                  className="flex-1 py-3 font-bold text-zinc-500"
+                >
+                  {t('stats.reset' as any)}
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={exchangeTotals.totalOut === 0 || exchangeTotals.totalOut !== exchangeTotals.totalIn || loading}
+                  className="flex-[2] py-3 bg-blue-600 disabled:opacity-50 rounded-xl font-bold text-white shadow-lg shadow-blue-500/20"
+                >
+                  {loading ? t('common.loading' as any) : t('stats.confirmExchange' as any)}
+                </button>
+               </div>
             </div>
           </form>
         </div>
