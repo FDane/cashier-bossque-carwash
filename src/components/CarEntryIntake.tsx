@@ -443,27 +443,30 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           )}
         </div>
 
-        {/* Estimated Price Display */}
-        <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-3xl p-6 shadow-xl shadow-blue-500/20 transition-all">
-          <div className="flex justify-between items-center">
-            <span className="text-blue-100 font-bold uppercase tracking-widest text-xs">
-              {t('intake.price' as any)}
-            </span>
-            <span className="text-3xl font-black text-white">
-              {formatCurrency(estimatedPrice)}
-            </span>
+        {/* Price & Submit Section - Floating on Mobile */}
+        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800 sm:relative sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none z-50 space-y-3">
+          {/* Estimated Price Display */}
+          <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-3xl p-5 sm:p-6 shadow-xl shadow-blue-500/20 transition-all">
+            <div className="flex justify-between items-center">
+              <span className="text-blue-100 font-bold uppercase tracking-widest text-xs">
+                {t('intake.price' as any)}
+              </span>
+              <span className="text-2xl sm:text-3xl font-black text-white">
+                {formatCurrency(estimatedPrice)}
+              </span>
+            </div>
           </div>
-        </div>
 
-        {/* Submit Button */}
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 active:scale-[0.98] disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed font-black py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-xl shadow-xl"
-        >
-          {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
-          <span className="uppercase tracking-widest">{t('intake.addQueue' as any)}</span>
-        </button>
+          {/* Submit Button */}
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 active:scale-[0.98] disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed font-black py-4 sm:py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-lg sm:text-xl shadow-xl"
+          >
+            {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
+            <span className="uppercase tracking-widest">{t('intake.addQueue' as any)}</span>
+          </button>
+        </div>
       </form>
     </div>
   )

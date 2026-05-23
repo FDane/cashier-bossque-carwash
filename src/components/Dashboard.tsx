@@ -76,7 +76,7 @@ export default function Dashboard() {
 
   // Prevent background scrolling when modals are open
   useEffect(() => {
-    if (showAdjModal || showAdvanceModal || isCashDrawerOpen || showExchangeModal) {
+    if (showAdjModal || showAdvanceModal || showExchangeModal) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
@@ -84,7 +84,7 @@ export default function Dashboard() {
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [showAdjModal, showAdvanceModal, isCashDrawerOpen, showExchangeModal])
+  }, [showAdjModal, showAdvanceModal, showExchangeModal])
 
   // Filter transactions to only include those completed today
   const todayCompleted = useMemo(() => {
@@ -305,30 +305,45 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Mobile Toggle for Cash Drawer */}
+        <div className="lg:hidden mt-8 mb-4">
+          <button
+            onClick={() => setIsCashDrawerOpen(!isCashDrawerOpen)}
+            className="w-full flex items-center justify-between p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[1.5rem] shadow-xl active:scale-[0.98] transition-all"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
+                <Banknote className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div className="text-left">
+                <span className="block text-sm font-black uppercase tracking-tight text-zinc-900 dark:text-white">
+                  {t('stats.cashDrawer' as any)}
+                </span>
+                <span className="block text-xs font-bold text-zinc-500 uppercase tracking-widest">
+                  RM {cashBreakdown.grandTotal.toFixed(2)}
+                </span>
+              </div>
+            </div>
+            {isCashDrawerOpen ? <ChevronUp className="w-5 h-5 text-zinc-400" /> : <ChevronDown className="w-5 h-5 text-zinc-400" />}
+          </button>
+        </div>
+
         {/* Cashier Box Breakdown */}
-        <div className={`mt-12 ${isCashDrawerOpen ? 'fixed inset-0 z-[90] bg-zinc-100 dark:bg-zinc-950 overflow-y-auto p-6 pt-20 lg:pt-0 lg:relative lg:inset-auto lg:bg-transparent lg:p-0 lg:block lg:mt-12' : 'hidden lg:block'}`}>
-          {isCashDrawerOpen && (
-            <button 
-              onClick={() => setIsCashDrawerOpen(false)}
-              className="lg:hidden absolute top-6 right-6 p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-lg text-zinc-500 z-[100]"
-            >
-              <X className="w-6 h-6" />
-            </button>
-          )}
+        <div className={`mt-8 lg:mt-12 animate-in fade-in slide-in-from-top-4 duration-500 ${isCashDrawerOpen ? 'block' : 'hidden'} lg:block`}>
           <div className="flex items-center gap-3 mb-6">
             <div className="p-2 bg-emerald-500/10 rounded-lg">
               <Banknote className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
             </div>
-            <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex-1 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div>
-                <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
+                <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-1">
                   {t('stats.cashDrawer' as any)}
                 </h3>
-                <div className="flex items-center gap-4">
-                  <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                    {t('stats.cashDrawer.total' as any)}: <span className="text-emerald-600 dark:text-emerald-400">RM {cashBreakdown.grandTotal.toFixed(2)}</span>
-                  </p>
-                  <div className="flex gap-2">
+                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                  <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest whitespace-nowrap">
+                    {t('stats.cashDrawer.total' as any)}: <span className="text-emerald-600 dark:text-emerald-400 font-black ml-1">RM {cashBreakdown.grandTotal.toFixed(2)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:flex gap-2">
                     <button 
                       onClick={() => setShowAdjModal('ADDITION')}
                       className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95"
@@ -358,24 +373,24 @@ export default function Dashboard() {
               </div>
               
               {/* Detailed Breakdown Tags */}
-              <div className="flex flex-wrap gap-2">
-                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2">
+              <div className="grid grid-cols-1 xs:grid-cols-2 sm:flex sm:flex-wrap gap-2 mt-2 lg:mt-0">
+                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2 shadow-sm">
                   <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tighter">
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">
                     {t('stats.salesCash' as any)}: 
                     <span className="ml-1 text-zinc-900 dark:text-white">{formatCurrency(cashBreakdown.totalCashValue)}</span>
                   </span>
                 </div>
-                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2">
+                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2 shadow-sm">
                   <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tighter">
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">
                     {t('stats.totalAdditions' as any)}: 
                     <span className="ml-1 text-indigo-600 dark:text-indigo-400">+{formatCurrency(cashBreakdown.totalAdditions)}</span>
                   </span>
                 </div>
-                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2">
+                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2 shadow-sm">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tighter">
+                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">
                     {t('stats.totalExpenses' as any)}: 
                     <span className="ml-1 text-red-600 dark:text-red-400">-{formatCurrency(cashBreakdown.totalExpenses)}</span>
                   </span>
@@ -386,7 +401,7 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Bill Grid */}
-            <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
               {[1, 5, 10, 20, 50, 100].map((bill) => {
                 const count = cashBreakdown.breakdown[bill] || 0
                 const colors: Record<number, string> = {
@@ -401,10 +416,10 @@ export default function Dashboard() {
                 return (
                   <div 
                     key={bill}
-                    className={`bg-gradient-to-br ${colors[bill]} border border-white/10 dark:border-white/5 rounded-2xl p-5 shadow-sm transition-transform hover:scale-[1.02]`}
+                    className={`bg-gradient-to-br ${colors[bill]} border border-white/10 dark:border-white/5 rounded-2xl p-4 sm:p-5 shadow-sm transition-transform hover:scale-[1.02]`}
                   >
-                    <div className="flex justify-between items-start mb-4">
-                      <span className="text-sm font-black opacity-60 uppercase">RM{bill}</span>
+                    <div className="flex justify-between items-start mb-3 sm:mb-4">
+                      <span className="text-xs sm:text-sm font-black opacity-60 uppercase">RM{bill}</span>
                       <div className="px-2 py-1 rounded-md bg-white/40 dark:bg-black/20 text-[10px] font-black">
                         x{count}
                       </div>
@@ -463,34 +478,6 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
-
-      {/* Mobile Floating Cash Drawer Bar */}
-      {!isCashDrawerOpen && (
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 z-[80] p-4 bg-gradient-to-t from-zinc-100 dark:from-zinc-950 via-zinc-100/80 dark:via-zinc-950/80 to-transparent pointer-events-none">
-          <button 
-            onClick={() => setIsCashDrawerOpen(true)}
-            className="w-full max-w-md mx-auto pointer-events-auto flex items-center justify-between bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-6 py-4 rounded-3xl shadow-2xl active:scale-[0.98] transition-all border border-white/10 dark:border-black/10 animate-in fade-in slide-in-from-bottom-10"
-          >
-            <div className="flex items-center gap-3">
-              <div className="bg-emerald-500/20 p-2 rounded-xl">
-                <Banknote className="w-5 h-5 text-emerald-500" />
-              </div>
-              <div className="text-left">
-                <span className="block text-[10px] font-black uppercase tracking-widest opacity-70 leading-none mb-1">
-                  {t('stats.cashDrawer' as any)}
-                </span>
-                <span className="block text-lg font-black leading-none">
-                  RM {cashBreakdown.grandTotal.toFixed(2)}
-                </span>
-              </div>
-            </div>
-            <div className="bg-emerald-500 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider">
-              {t('common.view' as any) || 'View'}
-            </div>
-          </button>
-        </div>
-      )}
-
       {/* Adjustment Modal */}
       {showAdjModal && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
