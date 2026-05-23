@@ -62,6 +62,18 @@ export default function PastCarSearch() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plate, searchMode, viewLimit])
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (selectedTransaction) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [selectedTransaction])
+
   // Dynamic Client-side Filtering
   const filteredResults = useMemo(() => {
     const search = plate.trim().toUpperCase()

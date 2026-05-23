@@ -136,6 +136,18 @@ export default function CashierCheckout({
     return () => { unsubPrice(); unsubRetail(); }
   }, [])
 
+  // Prevent background scrolling when modals are open
+  useEffect(() => {
+    if (checkoutModal.transaction || editingTransaction || viewingImageUrl) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [checkoutModal.transaction, editingTransaction, viewingImageUrl])
+
   // Local filtering: No extra Firebase cost
   const filteredTransactions = useMemo(() => {
     let result = [...pendingTransactions]

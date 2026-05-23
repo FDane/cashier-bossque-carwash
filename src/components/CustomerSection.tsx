@@ -108,6 +108,18 @@ export default function CustomerSection() {
     return () => unsub()
   }, [])
 
+  // Prevent background scrolling when modals are open
+  useEffect(() => {
+    if (isAddModalOpen || viewingImageUrl) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [isAddModalOpen, viewingImageUrl])
+
   const filteredCustomers = useMemo(() => {
     const q = searchQuery.toUpperCase().trim()
     if (!q) return allCustomers

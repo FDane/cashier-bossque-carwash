@@ -67,6 +67,18 @@ export default function Dashboard() {
     return () => { unsub(); if (unsubAttendance) unsubAttendance(); }
   }, [])
 
+  // Prevent background scrolling when modals are open
+  useEffect(() => {
+    if (showAdjModal || showAdvanceModal) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [showAdjModal, showAdvanceModal])
+
   // Filter transactions to only include those completed today
   const todayCompleted = useMemo(() => {
     const todayStr = getKLDateString()

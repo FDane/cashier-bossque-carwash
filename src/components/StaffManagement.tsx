@@ -77,6 +77,18 @@ export default function StaffManagement() {
     setSelectAll(all)
   }, [selected, rows])
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (viewingImageUrl) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [viewingImageUrl])
+
   function toggleSelect(id: string) {
     setSelected((s) => ({ ...s, [id]: !s[id] }))
   }

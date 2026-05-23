@@ -57,6 +57,18 @@ export default function InventoryManagement() {
     return () => unsub && unsub()
   }, [])
 
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (editingItem) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = 'unset'
+    }
+    return () => {
+      document.body.style.overflow = 'unset'
+    }
+  }, [editingItem])
+
   const filteredItems = useMemo(() => {
     return items.filter(item => 
       item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
