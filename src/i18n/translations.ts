@@ -43,6 +43,9 @@ export const translations = {
     'intake.error.brandRequired': 'Brand is required',
     'intake.error.priceZero': 'Invalid price for selected services',
     'intake.success': 'Car added to queue successfully',
+    'intake.error': 'Error adding car to queue',
+    'intake.notes': 'Notes',
+    'intake.notesPlaceholder': 'Add any internal notes here...',
 
     // Phase 2: Cashier
     'cashier.title': 'Cashier Counter Checkout',
@@ -120,6 +123,7 @@ export const translations = {
     'payment.total:': 'Total',
     'payment.batch': 'Batch of',
     'payment.groupPayment': 'Group Payment',
+    'payment.paidTime': 'Paid Time',
     'stats.cashDrawer': 'Cash Drawer Breakdown',
     'stats.cashDrawer.total': 'Total Cash in Till',
     'stats.salesCash': 'Cash Sales',
@@ -262,6 +266,10 @@ export const translations = {
     'intake.error.brandRequired': 'Jenama diperlukan',
     'intake.error.priceZero': 'Harga tidak sah untuk perkhidmatan yang dipilih',
     'intake.success': 'Kereta berjaya ditambah ke queue',
+    'intake.error': 'Ralat saat menambah kereta ke queue',
+    'intake.notes': 'Catatan',
+    'intake.notesPlaceholder': 'Tambah catatan di sini...',
+
 
     // Phase 2: Cashier
     'cashier.title': 'Kaunter Bayaran Kenderaan',
@@ -339,6 +347,7 @@ export const translations = {
     'payment.total:': 'Jumlah',
     'payment.batch': 'Kelompok',
     'payment.groupPayment': 'Bayaran Kumpulan',
+    'payment.paidTime': 'Waktu Pembayaran',
     'stats.cashDrawer': 'Pecahan Laci Tunai',
     'stats.cashDrawer.total': 'Jumlah Tunai di Laci',
     'stats.salesCash': 'Jualan Tunai',

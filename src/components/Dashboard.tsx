@@ -90,7 +90,8 @@ export default function Dashboard() {
   const todayCompleted = useMemo(() => {
     const todayStr = getKLDateString()
     return completedTransactions.filter(trans => {
-      if (!trans.paidTime) return false
+      // If paidTime is null (pending server sync), assume it's today since it just moved to COMPLETED
+      if (!trans.paidTime) return true 
       const paidDate = trans.paidTime instanceof Date ? trans.paidTime : new Date(trans.paidTime)
       return getKLDateString(paidDate) === todayStr
     })

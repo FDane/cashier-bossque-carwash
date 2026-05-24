@@ -222,7 +222,7 @@ export default function PastCarSearch() {
                   <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('intake.services' as any)}</th>
                   <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('payment.amountReceived' as any)}</th>
                   <th className="text-left px-4 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('payment.paymentMethod' as any)}</th>
-                  <th className="text-left px-8 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('staff.checkIn' as any)}</th>
+                  <th className="text-left px-8 text-xs font-black text-zinc-500 uppercase tracking-widest">{t('payment.paidTime' as any) || 'Checkout'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -278,11 +278,11 @@ export default function PastCarSearch() {
                       <div className="flex flex-col">
                         <span className="flex items-center gap-1.5">
                           <Calendar className="w-3.5 h-3.5" />
-                          {r.checkInTime?.toDate ? r.checkInTime.toDate().toLocaleDateString() : ''}
+                          {r.paidTime?.toDate ? r.paidTime.toDate().toLocaleDateString() : ''}
                         </span>
                         <span className="flex items-center gap-1.5 text-[10px] opacity-60">
                           <Clock className="w-3 h-3" />
-                          {r.checkInTime?.toDate ? r.checkInTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(r.checkInTime)}
+                          {r.paidTime?.toDate ? r.paidTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : String(r.paidTime)}
                         </span>
                       </div>
                     </td>
@@ -343,7 +343,7 @@ export default function PastCarSearch() {
                   {selectedTransaction.plateNumber}
                 </h3>
                 <p className="text-zinc-500 font-bold uppercase text-xs tracking-widest mt-1">
-                  {selectedTransaction.brand} {selectedTransaction.model}
+                  {selectedTransaction.brand} {selectedTransaction.model} • {selectedTransaction.color}
                 </p>
               </div>
               <button
@@ -379,6 +379,19 @@ export default function PastCarSearch() {
                   </div>
                 </div>
                 <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">{t('payment.paidTime' as any) || 'Checkout'}</p>
+                  <div className="flex flex-col text-zinc-900 dark:text-white">
+                    <span className="font-bold flex items-center gap-2">
+                      <Calendar className="w-4 h-4 text-emerald-500" />
+                      {selectedTransaction.paidTime?.toDate ? selectedTransaction.paidTime.toDate().toLocaleDateString() : ''}
+                    </span>
+                    <span className="text-sm font-medium opacity-60 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-emerald-500" />
+                      {selectedTransaction.paidTime?.toDate ? selectedTransaction.paidTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                </div>
+                <div>
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">{t('payment.paymentMethod' as any)}</p>
                   <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
                     selectedTransaction.paymentMethod === 'CASH' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-indigo-500/10 text-indigo-600'
@@ -387,6 +400,17 @@ export default function PastCarSearch() {
                   </span>
                 </div>
               </div>
+
+              {selectedTransaction.notes && (
+                <div>
+                  <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">{t('intake.notes' as any) || 'Notes'}</p>
+                  <div className="p-4 bg-amber-50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/10 rounded-2xl">
+                    <p className="text-sm text-zinc-700 dark:text-zinc-300 italic">
+                      "{selectedTransaction.notes}"
+                    </p>
+                  </div>
+                </div>
+              )}
 
               <div className="space-y-6">
                 <div>

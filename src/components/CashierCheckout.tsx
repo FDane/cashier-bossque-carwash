@@ -439,8 +439,8 @@ export default function CashierCheckout({
           itemTotal, // Set individual cashReceived to match car price + attributed extras
           itemTotal,
           itemAddons,
-          {}, // Don't save denominations per car to avoid drawer confusion
-          {}
+          i === 0 ? checkoutModal.cashDenominations : {},
+          i === 0 ? checkoutModal.changeDenominations : {}
         );
       }
 

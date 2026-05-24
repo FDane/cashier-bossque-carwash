@@ -176,7 +176,8 @@ export function listenToTransactions(
 ): Unsubscribe {
   const q = query(
     collection(db, TRANSACTIONS_COLLECTION),
-    where('status', '==', status)
+    where('status', '==', status),
+    orderBy(status === 'PENDING' ? 'checkInTime' : 'paidTime', 'desc')
   )
 
   return onSnapshot(q, (snapshot) => {
@@ -605,12 +606,12 @@ export async function getPastTransactions(
     )
   } else {
     // Default sorting by time for Date searches or browsing
-    q = query(q, orderBy('checkInTime', 'desc'))
+    q = query(q, orderBy('paidTime', 'desc'))
 
     if (date) {
       const start = new Date(`${date}T00:00:00+08:00`)
       const end = new Date(`${date}T23:59:59+08:00`)
-      q = query(q, where('checkInTime', '>=', start), where('checkInTime', '<=', end))
+      q = query(q, where('paidTime', '>=', start), where('paidTime', '<=', end))
     }
   }
 
