@@ -406,7 +406,7 @@ export default function PastCarSearch() {
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">{t('intake.notes' as any) || 'Notes'}</p>
                   <div className="p-4 bg-amber-50 dark:bg-amber-500/5 border border-amber-100 dark:border-amber-500/10 rounded-2xl">
                     <p className="text-sm text-zinc-700 dark:text-zinc-300 italic">
-                      "{selectedTransaction.notes}"
+                      &quot;{selectedTransaction.notes}&quot;
                     </p>
                   </div>
                 </div>
