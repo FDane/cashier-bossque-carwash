@@ -227,9 +227,9 @@ export async function updateDailyStats(
     midCars = 0,
     seniorCars = 0
 
-  if (totalCars <= 19) juniorCars = 1
-  else if (totalCars <= 29) midCars = 1
-  else seniorCars = 1
+  if (totalCars <= 19) juniorCars = totalCars
+  else if (totalCars <= 29) midCars = totalCars
+  else seniorCars = totalCars
 
   // Check if document exists
   const docSnapshot = await getDoc(statsRef)
@@ -249,7 +249,7 @@ export async function updateDailyStats(
     // Update existing document
     const revenueField = paymentMethod === 'CASH' ? 'totalCashRevenue' : 'totalOnlineRevenue'
     await updateDoc(statsRef, {
-      totalCars: increment(1),
+      totalCars: increment(totalCars),
       juniorCars: increment(juniorCars),
       midCars: increment(midCars),
       seniorCars: increment(seniorCars),
@@ -264,14 +264,14 @@ export async function updateDailyStats(
 
     const initialDenoms: any = {}
     if (paymentMethod === 'CASH') {
-      [1, 5, 10, 20, 50, 100].forEach(b => {
+      ;[1, 5, 10, 20, 50, 100].forEach(b => {
         initialDenoms[`cashCount_${b}`] = denominations[b] || 0
       })
     }
 
     await setDoc(statsRef, {
       date: today,
-      totalCars: 1,
+      totalCars: totalCars,
       juniorCars,
       midCars,
       seniorCars,
@@ -428,7 +428,7 @@ export async function clockOutAllToday(): Promise<void> {
   const snapshot = await getDocs(q)
   const updates = snapshot.docs
     .map(d => clockOutAttendance(d.id))
-  
+
   await Promise.all(updates)
 }
 
@@ -443,13 +443,13 @@ export async function recordStaffAdvance(
   denominations: Record<string, number> = {}
 ): Promise<void> {
   const today = todayDateString()
-  
+
   // 1. Add to cash adjustments (Drawer Expense)
   await addCashAdjustment('EXPENSE', amount, `Staff Advance: ${staffName}`, denominations)
-  
+
   // 2. Update attendance record
   await addMoneyAdvanceForAttendance(attendanceId, amount)
-  
+
   // 3. Update Daily Salaries record
   const salaryId = `${staffId}_${today}`
   const salaryRef = doc(db, DAILY_SALARIES_COLLECTION, salaryId)
@@ -519,7 +519,7 @@ export async function deleteInventoryItem(itemId: string): Promise<void> {
 
 export async function updateInventoryQuantity(itemId: string, delta: number) {
   const ref = doc(db, INVENTORY_COLLECTION, itemId)
-  await updateDoc(ref, { 
+  await updateDoc(ref, {
     quantity: increment(delta),
     lastUpdated: new Date().toISOString()
   })

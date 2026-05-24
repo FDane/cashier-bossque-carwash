@@ -56,7 +56,7 @@ interface SelectedAddon {
 }
 
 interface CheckoutModalData {
-  transaction: Transaction | null
+  transactions: Transaction[]
   paymentMethod: PaymentMethod
   cashReceived: number
   selectedAddons: SelectedAddon[]
@@ -75,7 +75,7 @@ export default function CashierCheckout({
   const [priceBook, setPriceBook] = useState<any[]>([])
   const [retailItems, setRetailItems] = useState<any[]>([])
   const [checkoutModal, setCheckoutModal] = useState<CheckoutModalData>({
-    transaction: null,
+    transactions: [],
     paymentMethod: null,
     cashReceived: 0,
     selectedAddons: [],
@@ -85,6 +85,7 @@ export default function CashierCheckout({
     notes: '',
   })
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null)
+  const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [processingId, setProcessingId] = useState<string | null>(null)
   const [checkoutImagePreviewUrl, setCheckoutImagePreviewUrl] = useState<string | null>(null)
 
@@ -138,7 +139,7 @@ export default function CashierCheckout({
 
   // Prevent background scrolling when modals are open
   useEffect(() => {
-    if (checkoutModal.transaction || editingTransaction || viewingImageUrl) {
+    if (checkoutModal.transactions.length > 0 || editingTransaction || viewingImageUrl) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
@@ -146,7 +147,7 @@ export default function CashierCheckout({
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [checkoutModal.transaction, editingTransaction, viewingImageUrl])
+  }, [checkoutModal.transactions, editingTransaction, viewingImageUrl])
 
   // Local filtering: No extra Firebase cost
   const filteredTransactions = useMemo(() => {
@@ -167,7 +168,9 @@ export default function CashierCheckout({
 
   // Calculate total with addons
   const totalWithAddons = useMemo(() => {
-    if (!checkoutModal.transaction) return 0
+    if (checkoutModal.transactions.length === 0) return 0
+    
+    const baseTotal = checkoutModal.transactions.reduce((sum, t) => sum + t.computedPrice, 0)
     const addonsTotal = checkoutModal.selectedAddons.reduce(
       (sum, item) => sum + item.price * item.quantity,
       0
@@ -176,32 +179,65 @@ export default function CashierCheckout({
       (sum, item) => sum + item.price,
       0
     )
-    return checkoutModal.transaction.computedPrice + addonsTotal + miscTotal
-  }, [checkoutModal.transaction, checkoutModal.selectedAddons, checkoutModal.miscCharges])
+    return baseTotal + addonsTotal + miscTotal
+  }, [checkoutModal.transactions, checkoutModal.selectedAddons, checkoutModal.miscCharges])
+
+  // Calculate total for batch selection
+  const selectionTotal = useMemo(() => {
+    return pendingTransactions
+      .filter(t => selectedIds.includes(t.id))
+      .reduce((sum, t) => sum + t.computedPrice, 0)
+  }, [pendingTransactions, selectedIds])
 
   // Calculate balance in real-time
   const balance = useMemo(() => {
-    if (!checkoutModal.transaction || checkoutModal.paymentMethod !== 'CASH') {
+    if (checkoutModal.transactions.length === 0 || checkoutModal.paymentMethod !== 'CASH') {
       return 0
     }
     return checkoutModal.cashReceived - totalWithAddons
   }, [
-    checkoutModal.transaction,
+    checkoutModal.transactions,
     checkoutModal.paymentMethod,
     checkoutModal.cashReceived,
     totalWithAddons,
   ])
 
   const handleCardClick = (transaction: Transaction) => {
+    if (selectedIds.length > 0) {
+      toggleSelection(transaction.id)
+    } else {
+      setCheckoutModal({
+        transactions: [transaction],
+        paymentMethod: null,
+        cashReceived: 0,
+        selectedAddons: [],
+        miscCharges: [],
+        cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+        changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
+        notes: (transaction as any).notes || '',
+      })
+    }
+  }
+
+  const toggleSelection = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    )
+  }
+
+  const handleBatchCheckout = () => {
+    const selected = pendingTransactions.filter(t => selectedIds.includes(t.id))
+    if (selected.length === 0) return
+    
     setCheckoutModal({
-      transaction,
+      transactions: selected,
       paymentMethod: null,
       cashReceived: 0,
       selectedAddons: [],
       miscCharges: [],
       cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
       changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
-      notes: (transaction as any).notes || '',
+      notes: '',
     })
   }
 
@@ -267,28 +303,25 @@ export default function CashierCheckout({
 
   const handleCheckoutImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (file && checkoutModal.transaction) {
-      setProcessingId(checkoutModal.transaction.id)
+    if (file && checkoutModal.transactions.length === 1) {
+      const targetTrans = checkoutModal.transactions[0]
+      setProcessingId(targetTrans.id)
       try {
         const compressedImageFile = await resizeImage(file)
         const { imageUrl, imagePath } = await uploadImageToFirebase(
           compressedImageFile,
-          checkoutModal.transaction.id,
-          checkoutModal.transaction.plateNumber,
-          checkoutModal.transaction.imagePath || undefined
+          targetTrans.id,
+          targetTrans.plateNumber,
+          targetTrans.imagePath || undefined
         )
 
-        await updateTransaction(checkoutModal.transaction.id, { imageUrl, imagePath })
+        await updateTransaction(targetTrans.id, { imageUrl, imagePath })
 
         setCheckoutModal((prev) =>
-          prev.transaction
+          prev.transactions.length > 0
             ? {
                 ...prev,
-                transaction: {
-                  ...prev.transaction,
-                  imageUrl,
-                  imagePath,
-                },
+                transactions: prev.transactions.map(t => t.id === targetTrans.id ? { ...t, imageUrl, imagePath } : t)
               }
             : prev
         )
@@ -362,7 +395,7 @@ export default function CashierCheckout({
   }
 
   const handleCheckout = async () => {
-    if (!checkoutModal.transaction || !checkoutModal.paymentMethod) {
+    if (checkoutModal.transactions.length === 0 || !checkoutModal.paymentMethod) {
       showToast.warning(t('payment.error.invalidCash' as any))
       return
     }
@@ -376,16 +409,12 @@ export default function CashierCheckout({
       return
     }
 
-    setProcessingId(checkoutModal.transaction.id)
+    setProcessingId('BATCH_PROCESSING')
 
     try {
-      // Save notes if changed
-      if (checkoutModal.notes !== ((checkoutModal.transaction as any).notes || '')) {
-        await updateTransaction(checkoutModal.transaction.id, { notes: checkoutModal.notes })
-      }
-
+    
       // Merge retail addons and misc charges for the database
-      const allAddons = [
+      const retailAndMisc = [
         ...checkoutModal.selectedAddons,
         ...checkoutModal.miscCharges.map(m => ({ 
           id: `misc_${Date.now()}_${m.name}`, 
@@ -395,31 +424,41 @@ export default function CashierCheckout({
         }))
       ]
 
-      // Update transaction status to COMPLETED
-      await completeTransaction(
-        checkoutModal.transaction.id,
-        checkoutModal.paymentMethod,
-        checkoutModal.cashReceived,
-        totalWithAddons,
-        allAddons,
-        checkoutModal.cashDenominations,
-        checkoutModal.changeDenominations
-      )
+      // Process each transaction
+      for (let i = 0; i < checkoutModal.transactions.length; i++) {
+        const trans = checkoutModal.transactions[i];
+        
+        // We attribute the retail/misc extras only to the FIRST car in the batch
+        // so the total money across all individual records matches the cash drawer.
+        const itemAddons = i === 0 ? retailAndMisc : [];
+        const itemTotal = trans.computedPrice + itemAddons.reduce((s, a) => s + (a.price * a.quantity), 0);
+
+        await completeTransaction(
+          trans.id,
+          checkoutModal.paymentMethod,
+          itemTotal, // Set individual cashReceived to match car price + attributed extras
+          itemTotal,
+          itemAddons,
+          {}, // Don't save denominations per car to avoid drawer confusion
+          {}
+        );
+      }
 
       // Update daily stats with revenue and car level
       await updateDailyStats(
         checkoutModal.paymentMethod,
         totalWithAddons,
-        pendingTransactions.length,
+        checkoutModal.transactions.length,
         checkoutModal.cashDenominations,
         checkoutModal.changeDenominations
       )
 
       showToast.success(t('payment.success' as any))
+      setSelectedIds([])
 
       // Close modal and reset state
       setCheckoutModal({
-        transaction: null,
+        transactions: [],
         paymentMethod: null,
         cashReceived: 0,
         selectedAddons: [],
@@ -438,7 +477,7 @@ export default function CashierCheckout({
 
   const closeModal = () => {
     setCheckoutModal({
-      transaction: null,
+      transactions: [],
       paymentMethod: null,
       cashReceived: 0,
       selectedAddons: [],
@@ -493,6 +532,25 @@ export default function CashierCheckout({
         </div>
       </div>
 
+      {/* Batch Selection Actions */}
+      {selectedIds.length > 0 && (
+        <div className="sticky top-24 z-30 flex items-center justify-between p-4 bg-blue-600 text-white rounded-[2rem] shadow-xl shadow-blue-500/30 animate-in slide-in-from-top-4">
+          <div className="flex items-center gap-3">
+            <span className="bg-white text-blue-600 w-8 h-8 rounded-full flex items-center justify-center font-black">
+              {selectedIds.length}
+            </span>
+            <div>
+              <span className="block font-black text-sm uppercase tracking-tight">{t('cashier.selected' as any)}</span>
+              <span className="block text-xs font-bold text-blue-100">{t('payment.total:' as any)} {formatCurrency(selectionTotal)}</span>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setSelectedIds([])} className="px-4 py-2 bg-blue-500 hover:bg-blue-700 rounded-xl font-bold transition-colors text-sm">{t('common.cancel' as any)}</button>
+            <button onClick={handleBatchCheckout} className="px-6 py-2 bg-white text-blue-600 hover:bg-blue-50 rounded-xl font-black transition-all flex items-center gap-2 shadow-lg">{t('common.confirm')} <ChevronRight className="w-4 h-4" /></button>
+          </div>
+        </div>
+      )}
+
       {/* Queue Status */}
       {transactionsLoading && (
         <div className="flex items-center justify-center py-12">
@@ -518,18 +576,32 @@ export default function CashierCheckout({
 
       {!transactionsLoading && filteredTransactions.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
-          {filteredTransactions.map((transaction) => (
-            // Get customer for the current transaction's plate
-            // eslint-disable-next-line react-hooks/rules-of-hooks
-            // const customerForPlate = useMemo(() => transactionCustomers[transaction.plateNumber], [transactionCustomers, transaction.plateNumber]);
+          {filteredTransactions.map((transaction) => {
+            const isSelected = selectedIds.includes(transaction.id)
+            return (
             <div
               key={transaction.id}
-              className="relative text-left group bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:border-blue-500 rounded-2xl p-5 sm:p-7 transition-all duration-300 hover:shadow-xl hover:shadow-blue-500/10 transform hover:-translate-y-1"
+              className={`relative text-left group bg-white dark:bg-zinc-900 border-2 rounded-2xl p-5 sm:p-7 transition-all duration-300 hover:shadow-xl transform hover:-translate-y-1 ${
+                isSelected 
+                  ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-900/10 shadow-lg shadow-blue-500/5' 
+                  : 'border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50'
+              }`}
             >
               <div className="mb-4">
                 <div className="flex justify-between items-center mb-2">
-                  <div className="text-zinc-500 text-xs uppercase font-semibold">
-                    {t('payment.plateNumber' as any)}
+                  <div className="flex items-center gap-3">
+                    <input 
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        e.stopPropagation();
+                        toggleSelection(transaction.id);
+                      }}
+                      className="w-5 h-5 rounded-md border-2 border-zinc-300 dark:border-zinc-700 accent-blue-600 cursor-pointer transition-all"
+                    />
+                    <div className="text-zinc-500 text-xs uppercase font-semibold">
+                      {t('payment.plateNumber' as any)}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <button 
@@ -624,18 +696,20 @@ export default function CashierCheckout({
                 </div>
               </div>
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
       {/* Checkout Modal */}
-      {checkoutModal.transaction && (
+      {checkoutModal.transactions.length > 0 && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-t-[2.5rem] sm:rounded-3xl w-full sm:w-full sm:max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom duration-300">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 px-6 sm:px-8 py-5 flex justify-between items-center">
               <h3 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white">
                 {t('payment.title' as any)}
+                {checkoutModal.transactions.length > 1 && ` (Batch of ${checkoutModal.transactions.length})`}
               </h3>
               <button
                 onClick={closeModal}
@@ -649,42 +723,37 @@ export default function CashierCheckout({
             <div className="p-6 sm:p-8 space-y-6 sm:space-y-8">
               {/* Transaction Info */}
               <div className="bg-blue-500/5 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/20 rounded-2xl p-5 sm:p-6">
-                <div className="space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
-                        {t('payment.plateNumber' as any)}
+                <div className="space-y-4">
+                  {/* Multi-vehicle summary list */}
+                  <div className="space-y-2 mb-4">
+                    {checkoutModal.transactions.map(t => (
+                      <div key={t.id} className="flex justify-between items-center bg-white/50 dark:bg-black/20 p-3 rounded-xl border border-blue-500/10">
+                        <div className="font-mono font-bold text-zinc-900 dark:text-white">{t.plateNumber}</div>
+                        <div className="text-sm font-black text-blue-600 dark:text-blue-400">{formatCurrency(t.computedPrice)}</div>
                       </div>
-                      <div className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white font-mono tracking-widest leading-none">
-                        {checkoutModal.transaction.plateNumber}
-                      </div>
-                    </div>
-                    <div className="mt-1">
-                      {transactionCustomers[checkoutModal.transaction.plateNumber] ? (
-                        <div className="flex items-center gap-1.5 text-sm font-bold text-blue-600 dark:text-blue-400 bg-blue-600/10 px-3 py-1.5 rounded-xl">
-                          <User className="w-4 h-4" />
-                          {transactionCustomers[checkoutModal.transaction.plateNumber].name}
-                        </div>
-                      ) : (
-                        <button
-                          onClick={() => router.push('/customers')}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-xs font-bold text-zinc-500 hover:text-blue-600 hover:border-blue-500 transition-all"
-                        >
-                          <Plus className="w-3 h-3" />
-                          {t('common.add' as any)} {t('customer.name' as any)}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                  <div>
-                    <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
-                      {t('payment.carDetails' as any)}
-                    </div>
-                    <div className="text-sm text-zinc-300">
-                      {checkoutModal.transaction.brand} {checkoutModal.transaction.model} • {t(`color.${checkoutModal.transaction.color}` as any)}
-                    </div>
+                    ))}
                   </div>
 
+                  {/* Customer display (if single car or same customer) */}
+                  <div className="flex items-center justify-between py-2 border-y border-blue-500/10">
+                    <span className="text-xs text-zinc-400 font-bold uppercase">{t('customer.name' as any)}</span>
+                    {checkoutModal.transactions.length === 1 && (
+                      transactionCustomers[checkoutModal.transactions[0].plateNumber] ? (
+                        <div className="text-sm font-bold text-blue-600">{transactionCustomers[checkoutModal.transactions[0].plateNumber].name}</div>
+                      ) : ( 
+                        <button
+                          onClick={() => router.push('/customers')}
+                          className="text-xs font-bold text-zinc-400 hover:text-blue-500 flex items-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" /> {t('common.add' as any)}
+                        </button>
+                      )
+                    )}
+                    {checkoutModal.transactions.length > 1 && <span className="text-sm font-bold text-zinc-500">Group Payment</span>}
+                  </div>
+
+                  {/* Image capture only available for single vehicle checkout in batch */}
+                  {checkoutModal.transactions.length === 1 && (
                   <div className="mt-4 rounded-3xl border border-zinc-200 dark:border-zinc-700 p-4 bg-zinc-50 dark:bg-zinc-900/50">
                     <div className="flex items-center justify-between gap-3">
                       <div>
@@ -701,7 +770,7 @@ export default function CashierCheckout({
                         className="inline-flex items-center gap-2 rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition"
                       >
                         <Camera className="w-4 h-4" />
-                        {checkoutModal.transaction.imageUrl ? (t('payment.changePhoto' as any) || 'Change Photo') : (t('payment.uploadPhoto' as any) || 'Upload Photo')}
+                        {checkoutModal.transactions[0].imageUrl ? (t('payment.changePhoto' as any) || 'Change Photo') : (t('payment.uploadPhoto' as any) || 'Upload Photo')}
                       </button>
                     </div>
                     <input
@@ -712,21 +781,22 @@ export default function CashierCheckout({
                       onChange={handleCheckoutImageCapture}
                       className="hidden"
                     />
-                    {checkoutModal.transaction.imageUrl && (
+                    {checkoutModal.transactions[0].imageUrl && (
                       <button
                         type="button"
-                        onClick={() => setViewingImageUrl(checkoutModal.transaction?.imageUrl || null)}
+                        onClick={() => setViewingImageUrl(checkoutModal.transactions[0].imageUrl || null)}
                         className="mt-3 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline"
                       >
                         {t('payment.viewUploadedPhoto' as any) || 'View uploaded photo'}
                       </button>
                     )}
-                    {checkoutImagePreviewUrl && !checkoutModal.transaction.imageUrl && (
+                    {checkoutImagePreviewUrl && !checkoutModal.transactions[0].imageUrl && (
                       <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
                         {t('payment.photoSelectedNote' as any) || 'A new photo is ready to upload.'}
                       </p>
                     )}
                   </div>
+                  )}
 
                   <div className="border-t border-zinc-700 pt-3">
                     <div className="text-sm text-zinc-500 uppercase font-bold mb-1">
@@ -809,19 +879,19 @@ export default function CashierCheckout({
               {/* Miscellaneous/Manual Charges */}
               <div className="space-y-4 pt-2 border-t border-zinc-100 dark:border-zinc-800">
                 <label className="block text-sm font-semibold text-zinc-900 dark:text-zinc-300">
-                  {t('cashier.miscCharges' as any)} (e.g. Dirty Charge)
+                  {t('cashier.miscCharges' as any)}
                 </label>
                 <div className="flex gap-2">
                   <input 
                     type="text"
-                    placeholder="Charge Name"
+                    placeholder={t('stats.reason' as any)}
                     value={miscForm.name}
                     onChange={e => setMiscForm({...miscForm, name: e.target.value})}
                     className="flex-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-white"
                   />
                   <input 
                     type="number"
-                    placeholder="Price"
+                    placeholder={t('inventory.price' as any)}
                     value={miscForm.price}
                     onChange={e => setMiscForm({...miscForm, price: e.target.value})}
                     className="w-24 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-white"

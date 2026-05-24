@@ -57,6 +57,7 @@ export const translations = {
     'cashier.editTitle': 'Edit Car Details',
     'cashier.updateSuccess': 'Car updated successfully',
     'cashier.miscCharges': 'Miscellaneous/Manual Charges',
+    'cashier.selected': 'Items Selected',
 
     // Customer
     'customer.title': 'Customer Management',
@@ -117,6 +118,8 @@ export const translations = {
     'payment.exactAmount': 'Exact Amount',
     'payment.clearCash': 'Clear',
     'payment.total:': 'Total',
+    'payment.batch': 'Batch of',
+    'payment.groupPayment': 'Group Payment',
     'stats.cashDrawer': 'Cash Drawer Breakdown',
     'stats.cashDrawer.total': 'Total Cash in Till',
     'stats.salesCash': 'Cash Sales',
@@ -183,6 +186,9 @@ export const translations = {
     'common.confirm': 'Confirm',
     'common.cancel': 'Cancel',
     'common.save': 'Save Changes',
+    'common.selectAll': 'Select All',
+    'common.deselectAll': 'Deselect All',
+    'common.proceed': 'Proceed',
     'common.loading': 'Loading...',
     'common.itemsPerPage': 'Items per page:',
     'common.page': 'Page',
@@ -270,6 +276,7 @@ export const translations = {
     'cashier.editTitle': 'Kemaskini Maklumat Kereta',
     'cashier.updateSuccess': 'Maklumat kereta dikemas kini',
     'cashier.miscCharges': 'Caj Tambahan',
+    'cashier.selected': 'Item Dipilih',
 
     // Customer
     'customer.title': 'Pengurusan Pelanggan',
@@ -330,6 +337,8 @@ export const translations = {
     'payment.exactAmount': 'Jumlah Tepat',
     'payment.clearCash': 'Padam',
     'payment.total:': 'Jumlah',
+    'payment.batch': 'Kelompok',
+    'payment.groupPayment': 'Bayaran Kumpulan',
     'stats.cashDrawer': 'Pecahan Laci Tunai',
     'stats.cashDrawer.total': 'Jumlah Tunai di Laci',
     'stats.salesCash': 'Jualan Tunai',
@@ -397,6 +406,9 @@ export const translations = {
     'common.confirm': 'Sahkan',
     'common.cancel': 'Batal',
     'common.save': 'Simpan Perubahan',
+    'common.selectAll': 'Pilih Semua',
+    'common.deselectAll': 'Batal Pilih Semua',
+    'common.proceed': 'Teruskan',
     'common.loading': 'Memuatkan...',
     'common.itemsPerPage': 'Rekod setiap halaman:',
     'common.page': 'Halaman',
