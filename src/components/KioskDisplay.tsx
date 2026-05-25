@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Car, Sparkles, Zap, Shield, CheckCircle2, Clock, CreditCard, Banknote, Tag, Package, Loader2 } from 'lucide-react'
+import { Car, Sparkles, Zap, Shield, CheckCircle2, Clock, CreditCard, Banknote, Tag, Package } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
 import Image from 'next/image'
 import { db } from '@/lib/firebase'
