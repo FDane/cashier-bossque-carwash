@@ -18,6 +18,7 @@ import {
   Image as ImageIcon,
   PlusCircle,
   User,
+  Palette,
 } from 'lucide-react'
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
@@ -47,6 +48,24 @@ const SERVICE_CATEGORIES = {
   interior: { ms: 'Dalam', en: 'Interior' },
   engine: { ms: 'Enjin', en: 'Engine' },
 }
+
+const CAR_COLORS = [
+  'Black',
+  'White',
+  'Silver',
+  'Gray',
+  'Blue',
+  'Red',
+  'Gold',
+  'Beige',
+  'Green',
+  'Orange',
+  'Purple',
+  'Yellow',
+  'Pink',
+  'Brown',
+  'Turquoise',
+]
 
 interface SelectedAddon {
   id: string
@@ -1232,6 +1251,30 @@ export default function CashierCheckout({
                         }`}
                       >
                         {SERVICE_CATEGORIES[s][language as 'en' | 'ms']}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Color Selection */}
+                <div className="space-y-3">
+                  <label className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
+                    <Palette className="w-3.5 h-3.5" />
+                    {t('intake.color' as any)}
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {CAR_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        type="button"
+                        onClick={() => setEditingTransaction({ ...editingTransaction, color })}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
+                          editingTransaction.color === color 
+                            ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md' 
+                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
+                        }`}
+                      >
+                        {t(`color.${color}` as any)}
                       </button>
                     ))}
                   </div>

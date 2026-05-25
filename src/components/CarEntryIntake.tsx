@@ -32,6 +32,11 @@ const CAR_COLORS = [
   'Beige',
   'Green',
   'Orange',
+  'Purple',
+  'Yellow',
+  'Pink',
+  'Brown',
+  'Turquoise',
 ]
 
 const SERVICE_CATEGORIES = {
@@ -458,14 +463,30 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
 
           {/* Submit Button */}
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 active:scale-[0.98] disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed font-black py-4 sm:py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-lg sm:text-xl shadow-xl"
-          >
-            {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
-            <span className="uppercase tracking-widest">{t('intake.addQueue' as any)}</span>
-          </button>
+          <div className="flex gap-3">
+            {/* Mobile-only secondary Camera Button */}
+            <button
+              type="button"
+              onClick={triggerImageCapture}
+              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center ${
+                imagePreviewUrl 
+                  ? 'bg-blue-600/10 border-blue-600 text-blue-600' 
+                  : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
+              }`}
+            >
+              <Camera className="w-6 h-6" />
+              {imagePreviewUrl && <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 rounded-full border-2 border-white dark:border-zinc-900 shadow-sm" />}
+            </button>
+
+            <button
+              type="submit"
+              disabled={loading}
+              className="flex-1 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 active:scale-[0.98] disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed font-black py-4 sm:py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-lg sm:text-xl shadow-xl"
+            >
+              {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
+              <span className="uppercase tracking-widest">{t('intake.addQueue' as any)}</span>
+            </button>
+          </div>
         </div>
       </form>
     </div>
