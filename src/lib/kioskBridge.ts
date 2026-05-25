@@ -44,6 +44,9 @@
  * 4. Navigate to /kiosk on the second screen tab. Done! ✅
  */
 
+import { db } from './firebase'
+import { doc, setDoc } from 'firebase/firestore'
+
 export type PaymentMethod = 'CASH' | 'ONLINE' | null
 
 export interface KioskState {
@@ -77,12 +80,26 @@ function getChannel(): BroadcastChannel | null {
   return _bc
 }
 
+let lastPushedState: string = ''
+
 export function pushKioskState(state: KioskState): void {
   const serialized = JSON.stringify(state)
+  
+  // Optimization: Don't push to Firestore if the state is identical to the last one
+  if (serialized === lastPushedState) return
+  lastPushedState = serialized
+
   // BroadcastChannel (instant cross-tab)
   try { getChannel()?.postMessage(state) } catch {}
   // localStorage (polling fallback for older browsers / different origins)
   try { localStorage.setItem('kiosk_state', serialized) } catch {}
+  
+  // Firestore (Real-time cross-device sync)
+  try {
+    setDoc(doc(db, 'settings', 'kiosk_state'), state).catch(() => {})
+  } catch (e) {
+    console.error("Kiosk Firestore Sync Error", e)
+  }
 }
 
 export function clearKioskState(): void {

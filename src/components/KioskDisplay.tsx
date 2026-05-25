@@ -1,9 +1,11 @@
 'use client'
 
 import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Car, Sparkles, Zap, Shield, CheckCircle2, Clock, CreditCard, Banknote, Tag, Package } from 'lucide-react'
+import { Car, Sparkles, Zap, Shield, CheckCircle2, Clock, CreditCard, Banknote, Tag, Package, Loader2 } from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
 import Image from 'next/image'
+import { db } from '@/lib/firebase'
+import { doc, onSnapshot } from 'firebase/firestore'
 
 // ─── Types (mirror from your actual types) ────────────────────────────────────
 interface Transaction {
@@ -80,28 +82,18 @@ function useKioskState() {
       bc = new BroadcastChannel('kiosk_state')
       bc.onmessage = (e: MessageEvent<KioskState>) => resetIdle(e.data)
     } catch { }
-
-    // ── localStorage fallback (polling) ──────────────────────────────────
-    const poll = setInterval(() => {
-      try {
-        const raw = localStorage.getItem('kiosk_state')
-        if (!raw) return
-        const parsed: KioskState = JSON.parse(raw)
-        setState(prev => {
-          if (JSON.stringify(prev) === raw) return prev
-          if (idleTimer.current) clearTimeout(idleTimer.current)
-          if (parsed.stage !== 'idle') {
-            idleTimer.current = setTimeout(() =>
-              setState(s => ({ ...s, stage: 'idle' })), IDLE_TIMEOUT_MS)
-          }
-          return parsed
-        })
-      } catch { }
-    }, 500)
+    
+    // ── Firestore Sync (Real-time cross-device) ──────────────────────────
+    const unsub = onSnapshot(doc(db, 'settings', 'kiosk_state'), (snapshot) => {
+      if (snapshot.exists()) {
+        const data = snapshot.data() as KioskState
+        resetIdle(data)
+      }
+    })
 
     return () => {
       bc?.close()
-      clearInterval(poll)
+      unsub()
       if (idleTimer.current) clearTimeout(idleTimer.current)
     }
   }, [resetIdle])
@@ -576,8 +568,8 @@ function LineItem({ label, sublabel, amount, accent, animate }: { label: string;
     </div>
   )
 }
-function formatTime(t: string | Date): string {
-  const d = t instanceof Date ? t : new Date(t)
+function formatTime(t: any): string {
+  const d = t?.toDate ? t.toDate() : (t instanceof Date ? t : new Date(t))
   return d.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
