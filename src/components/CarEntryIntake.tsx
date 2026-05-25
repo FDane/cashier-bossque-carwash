@@ -202,9 +202,17 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     setLoading(true)
 
     try {
+      // Format plate number: trim, remove internal extra spaces, ensure space between letters and numbers
+      const formattedPlate = formData.plateNumber
+        .trim()
+        .toUpperCase()
+        .replace(/\s+/g, '') // Remove all existing spaces to re-format consistently
+        .replace(/([A-Z]+)(\d+)/g, '$1 $2')
+        .replace(/(\d+)([A-Z]+)/g, '$1 $2');
+
       // Create the transaction first to get an ID
       const transactionId = await createTransaction(
-        formData.plateNumber,
+        formattedPlate,
         formData.brand,
         selectedModels[0] || 'Unknown',
         formData.color || 'Unknown',
@@ -217,7 +225,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           const { imageUrl, imagePath } = await uploadImageToFirebase(
             imageFile,
             transactionId,
-            formData.plateNumber
+            formattedPlate
           )
           await updateTransaction(transactionId, { imageUrl, imagePath })
         } catch (uploadError) {
@@ -244,7 +252,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
 
       onTransactionAdded?.({
         id: transactionId,
-        plateNumber: formData.plateNumber,
+        plateNumber: formattedPlate,
         brand: formData.brand,
         model: selectedModels[0] || '',
         computedPrice: estimatedPrice,
