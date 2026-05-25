@@ -34,7 +34,7 @@ import {
 } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency, formatTime } from '@/lib/utils'
-
+import { pushKioskState } from '@/lib/kioskBridge'
 import { resizeImage } from '@/lib/imageUtils' // Import image utility
 import { useRouter } from 'next/navigation'
 
@@ -507,6 +507,7 @@ export default function CashierCheckout({
     })
   }
 
+  // 1. Move all Memos to be defined first
   const totalChangeValue = useMemo(() => {
     return Object.entries(checkoutModal.changeDenominations).reduce(
       (sum, [bill, count]) => sum + parseInt(bill) * count,
@@ -515,6 +516,45 @@ export default function CashierCheckout({
   }, [checkoutModal.changeDenominations])
 
   const isChangeIncomplete = balance > 0 && totalChangeValue !== balance
+
+  // 2. Define the Kiosk Sync Effect LAST, after all computed values are ready
+  useEffect(() => {
+    if (checkoutModal.transactions.length === 0) {
+      pushKioskState({
+        stage: 'idle',
+        transactions: [],
+        paymentMethod: null,
+        cashReceived: 0,
+        selectedAddons: [],
+        miscCharges: [],
+        totalAmount: 0,
+        balance: 0,
+      })
+      return
+    }
+    pushKioskState({
+      stage: checkoutModal.paymentMethod ? 'payment'
+           : checkoutModal.selectedAddons.length ? 'addons'
+           : 'selecting',
+      transactions: checkoutModal.transactions.map(t => ({
+        id: t.id,
+        plateNumber: t.plateNumber,
+        brand: t.brand,
+        model: t.model,
+        color: t.color,
+        services: t.services,
+        computedPrice: t.computedPrice,
+        imageUrl: t.imageUrl,
+      checkInTime: t.checkInTime instanceof Date ? t.checkInTime : new Date(t.checkInTime).toISOString()
+    })),
+    paymentMethod: checkoutModal.paymentMethod,
+    cashReceived: checkoutModal.cashReceived,
+    selectedAddons: checkoutModal.selectedAddons,
+    miscCharges: checkoutModal.miscCharges,
+    totalAmount: totalWithAddons,
+    balance,
+  })
+}, [checkoutModal, totalWithAddons, balance])
 
   return (
     <div className="space-y-6 sm:space-y-8">

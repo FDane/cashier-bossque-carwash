@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { LanguageProvider } from '@/components/LanguageContext'
-import AppHeader from '@/components/AppHeader'
+import LayoutWrapper from '@/components/LayoutWrapper'
 
 export const metadata: Metadata = {
   title: 'Bossque Carwash - Dashboard',
@@ -42,10 +42,9 @@ export default function RootLayout({
       </head>
       <body className="bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50 antialiased selection:bg-blue-500/30 transition-colors duration-300">
         <LanguageProvider>
-          <AppHeader />
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <LayoutWrapper>
             {children}
-          </div>
+          </LayoutWrapper>
         </LanguageProvider>
       </body>
     </html>
