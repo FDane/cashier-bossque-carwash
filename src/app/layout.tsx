@@ -6,6 +6,12 @@ import LayoutWrapper from '@/components/LayoutWrapper'
 export const metadata: Metadata = {
   title: 'Bossque Carwash - Dashboard',
   description: 'Modern carwash management system with real-time queue and payment processing',
+  manifest: '/manifest.json', // Add manifest link
+  appleWebApp: { // Apple specific PWA settings
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Bossque Carwash',
+  },
   keywords: ['carwash', 'management', 'dashboard', 'queue', 'payment'],
   authors: [{ name: 'Bossque Team' }],
 }
@@ -15,6 +21,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 5,
   colorScheme: 'dark light',
+  themeColor: '#2563eb', // Moved themeColor here
 }
 
 export default function RootLayout({
