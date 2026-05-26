@@ -1,8 +1,8 @@
 {
   "name": "Bossque Carwash",
-  "short_name": "Cashier Bossque",
+  "short_name": "Kiosk Bossque",
   "description": "Bossque Carwash Management System",
-  "start_url": "/",
+  "start_url": "/kiosk",
   "display": "standalone",
   "background_color": "#09090b",
   "theme_color": "#2563eb",
