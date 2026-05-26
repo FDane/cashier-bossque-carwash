@@ -48,9 +48,9 @@ interface KioskState {
 // null        → no overlay
 type PopupPhase = 'payment' | 'confirmed' | null
 
-const IDLE_TIMEOUT_MS   = 45_000   // 45 s of no Firestore updates → go idle
-const PROCESSING_MS     = 2_500    // "Transaksi Diproses" shown for 2.5 s after payment popup opens
-const CONFIRMED_MS      = 4_000    // "Transaksi Diterima" shown for 4 s before going idle
+const IDLE_TIMEOUT_MS = 45_000   // 45 s of no Firestore updates → go idle
+const PROCESSING_MS = 2_500    // "Transaksi Diproses" shown for 2.5 s after payment popup opens
+const CONFIRMED_MS = 4_000    // "Transaksi Diterima" shown for 4 s before going idle
 
 const COLOR_MAP: Record<string, string> = {
   Black: '#1a1a1a', White: '#f5f5f5', Silver: '#c0c0c0', Gray: '#808080',
@@ -201,9 +201,9 @@ function PaymentPopup({
         >
           {isProcessing
             ? <><span className="spin-icon"><Loader className="w-4 h-4 text-amber-400" /></span>
-                <span className="text-amber-400 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span></>
+              <span className="text-amber-400 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span></>
             : <><CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span></>
+              <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span></>
           }
         </div>
 
@@ -254,9 +254,9 @@ function PaymentPopup({
       >
         {isProcessing
           ? <><span className="spin-icon"><Loader className="w-4 h-4 text-amber-400" /></span>
-              <span className="text-amber-400 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span></>
+            <span className="text-amber-400 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span></>
           : <><CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span></>
+            <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span></>
         }
       </div>
 
@@ -355,18 +355,24 @@ function CheckoutScreen({ state }: { state: KioskState }) {
   const SERVICE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
     exterior: { label: t('intake.services.exterior'), icon: <Sparkles className="w-4 h-4" />, color: '#3b82f6' },
     interior: { label: t('intake.services.interior'), icon: <Shield className="w-4 h-4" />, color: '#8b5cf6' },
-    engine:   { label: t('intake.services.engine'),   icon: <Zap className="w-4 h-4" />,      color: '#f59e0b' },
+    engine: { label: t('intake.services.engine'), icon: <Zap className="w-4 h-4" />, color: '#f59e0b' },
   }
 
   // ── Total change flash ──
   const [prevTotal, setPrevTotal] = useState(totalAmount)
   const [totalChanged, setTotalChanged] = useState(false)
   useEffect(() => {
+    let t: ReturnType<typeof setTimeout>;
+
     if (totalAmount !== prevTotal) {
       setTotalChanged(true)
       setPrevTotal(totalAmount)
-      const t2 = setTimeout(() => setTotalChanged(false), 600)
-      return () => clearTimeout(t2)
+      t = setTimeout(() => setTotalChanged(false), 600)
+    }
+
+    // This is now executed unconditionally on every path
+    return () => {
+      if (t) clearTimeout(t)
     }
   }, [totalAmount, prevTotal])
 
