@@ -12,6 +12,10 @@ export const metadata: Metadata = {
     statusBarStyle: 'default',
     title: 'Bossque Carwash',
   },
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
   keywords: ['carwash', 'management', 'dashboard', 'queue', 'payment'],
   authors: [{ name: 'Bossque Team' }],
 }
