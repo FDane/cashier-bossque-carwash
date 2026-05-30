@@ -446,7 +446,11 @@ export async function recordStaffAdvance(
   const today = todayDateString()
 
   // 1. Add to cash adjustments (Drawer Expense)
-  await addCashAdjustment('EXPENSE', amount, `Staff Advance: ${staffName}`, denominations)
+  await addCashAdjustment('EXPENSE', amount, `Staff Advance: ${staffName}`, denominations, {
+    isStaffAdvance: true,
+    staffId,
+    attendanceId
+  })
 
   // 2. Update attendance record
   await addMoneyAdvanceForAttendance(attendanceId, amount)
@@ -629,9 +633,43 @@ export async function getPastTransactions(
 }
 
 /**
+ * Helper to update only denominations in daily stats
+ */
+async function updateDailyStatsDenoms(date: string, denominations: Record<string, number>, isAddition: boolean) {
+  if (!denominations || Object.keys(denominations).length === 0) return
+  
+  const statsRef = doc(db, DAILY_STATS_COLLECTION, date)
+  const snap = await getDoc(statsRef)
+  
+  const denomUpdates: any = {}
+  Object.entries(denominations).forEach(([bill, count]) => {
+    denomUpdates[`cashCount_${bill}`] = increment(isAddition ? count : -count)
+  })
+
+  if (snap.exists()) {
+    await updateDoc(statsRef, denomUpdates)
+  } else {
+    const initial: any = {
+      date,
+      totalCars: 0,
+      juniorCars: 0,
+      midCars: 0,
+      seniorCars: 0,
+      totalCashRevenue: 0,
+      totalOnlineRevenue: 0,
+      totalRevenue: 0,
+    }
+    Object.entries(denominations).forEach(([bill, count]) => {
+      initial[`cashCount_${bill}`] = isAddition ? count : -count
+    })
+    await setDoc(statsRef, initial)
+  }
+}
+
+/**
  * Cash Adjustment helpers (Expenses/Additions)
  */
-export async function addCashAdjustment(type: 'EXPENSE' | 'ADDITION', amount: number, reason: string, denominations: Record<string, number> = {}) {
+export async function addCashAdjustment(type: 'EXPENSE' | 'ADDITION', amount: number, reason: string, denominations: Record<string, number> = {}, metadata: any = {}) {
   const today = todayDateString()
   const data = {
     type,
@@ -640,8 +678,14 @@ export async function addCashAdjustment(type: 'EXPENSE' | 'ADDITION', amount: nu
     denominations,
     date: today,
     timestamp: serverTimestamp(),
+    ...metadata
   }
-  return await addDoc(collection(db, CASH_ADJUSTMENTS_COLLECTION), data)
+  const docRef = await addDoc(collection(db, CASH_ADJUSTMENTS_COLLECTION), data)
+
+  // Update daily stats denominations
+  await updateDailyStatsDenoms(today, denominations, type === 'ADDITION')
+
+  return docRef
 }
 
 export function listenToTodayAdjustments(callback: (items: any[]) => void): Unsubscribe {
@@ -659,7 +703,28 @@ export function listenToTodayAdjustments(callback: (items: any[]) => void): Unsu
 }
 
 export async function deleteCashAdjustment(id: string) {
-  await deleteDoc(doc(db, CASH_ADJUSTMENTS_COLLECTION, id))
+  const ref = doc(db, CASH_ADJUSTMENTS_COLLECTION, id)
+  const snap = await getDoc(ref)
+  
+  if (snap.exists()) {
+    const data = snap.data()
+    // If this was a staff advance, reverse the financial impact on staff records
+    if (data.isStaffAdvance && data.staffId && data.attendanceId) {
+      const attRef = doc(db, ATTENDANCE_COLLECTION, data.attendanceId)
+      await updateDoc(attRef, { moneyAdvance: increment(-data.amount) })
+
+      const salaryId = `${data.staffId}_${data.date}`
+      const salaryRef = doc(db, DAILY_SALARIES_COLLECTION, salaryId)
+      await updateDoc(salaryRef, { advancesDeducted: increment(-data.amount) })
+    }
+
+    // Properly update denominations in daily stats
+    if (data.denominations && data.date) {
+      await updateDailyStatsDenoms(data.date, data.denominations, data.type !== 'ADDITION')
+    }
+  }
+  
+  await deleteDoc(ref)
 }
 
 /**

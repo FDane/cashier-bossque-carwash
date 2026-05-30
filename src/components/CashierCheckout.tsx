@@ -30,6 +30,7 @@ import {
   uploadImageToFirebase,
   listenToFullPriceBook,
   listenToRetailItems,
+  updateInventoryQuantity,
   getCustomerByPlate,
 } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
@@ -442,6 +443,11 @@ export default function CashierCheckout({
           quantity: 1 
         }))
       ]
+
+      // Decrement inventory for selected retail addons
+      for (const addon of checkoutModal.selectedAddons) {
+        await updateInventoryQuantity(addon.id, -addon.quantity)
+      }
 
       // Process each transaction
       for (let i = 0; i < checkoutModal.transactions.length; i++) {
