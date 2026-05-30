@@ -136,7 +136,8 @@ function IdleScreen() {
     const t = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
-  const timeStr = time.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true })
+  const timeStr = time.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+  const dateStr = time.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-zinc-950">
@@ -152,8 +153,13 @@ function IdleScreen() {
             CARWASH <span style={{ color: '#818cf8' }}>BOSSQUE</span>
           </h1>
         </div>
-        <div className="text-white leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '160px', letterSpacing: '-4px' }}>
-          {timeStr}
+        <div className="flex flex-col items-center gap-4">
+          <div className="text-white leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '140px', letterSpacing: '-4px' }}>
+            {timeStr}
+          </div>
+          <p className="text-indigo-400 font-bold text-3xl uppercase tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+            {dateStr}
+          </p>
         </div>
         <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest">
           Selamat Datang • Sila Tunggu Sebentar
