@@ -715,7 +715,11 @@ export async function deleteCashAdjustment(id: string) {
 
       const salaryId = `${data.staffId}_${data.date}`
       const salaryRef = doc(db, DAILY_SALARIES_COLLECTION, salaryId)
-      await updateDoc(salaryRef, { advancesDeducted: increment(-data.amount) })
+      // Use setDoc with merge instead of updateDoc to prevent failure if doc is missing
+      await setDoc(salaryRef, { 
+        advancesDeducted: increment(-Number(data.amount)),
+        lastUpdated: serverTimestamp() 
+      }, { merge: true })
     }
 
     // Properly update denominations in daily stats

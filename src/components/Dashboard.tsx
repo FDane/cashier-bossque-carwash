@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useMemo, useState, useEffect } from 'react'
-import toast from 'react-hot-toast'
+import toast, { Toaster } from 'react-hot-toast'
 import CarEntryIntake from '@/components/CarEntryIntake'
 import CashierCheckout from '@/components/CashierCheckout'
 import { useTransactions } from '@/hooks/useTransactions'
@@ -309,6 +309,9 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-950 dark:text-white transition-colors duration-200">
+      {/* Ensure Toaster is present so toast() calls are visible */}
+      <Toaster />
+      
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32 lg:pb-8">
         {/* Two-Phase Layout */}
