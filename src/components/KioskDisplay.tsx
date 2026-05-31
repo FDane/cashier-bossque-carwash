@@ -64,7 +64,7 @@ const fmt = (n: number) =>
 
 function formatTime(t: any): string {
   const d = t?.toDate ? t.toDate() : (t instanceof Date ? t : new Date(t))
-  return d.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true })
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
 // ─── Kiosk State Hook ─────────────────────────────────────────────────────────
@@ -136,7 +136,7 @@ function IdleScreen() {
     const t = setInterval(() => setTime(new Date()), 1000)
     return () => clearInterval(t)
   }, [])
-  const timeStr = time.toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+  const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
   const dateStr = time.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
@@ -146,10 +146,10 @@ function IdleScreen() {
         style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }}
       />
       <div className="relative z-10 flex flex-col items-center gap-8 text-center px-8">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-col items-center gap-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Bossque Carwash Logo" width={44} height={44} className="rounded-xl object-contain" />
-          <h1 className="text-left font-black text-5xl tracking-widest text-white uppercase" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+          <img src="/logo.png" alt="Bossque Carwash Logo" width={120} height={120} className="rounded-2xl object-contain shadow-2xl" />
+          <h1 className="text-center font-black text-6xl tracking-widest text-white uppercase" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
             CARWASH <span style={{ color: '#818cf8' }}>BOSSQUE</span>
           </h1>
         </div>
@@ -562,7 +562,7 @@ function CheckoutScreen({ state }: { state: KioskState }) {
         <div className="px-8 py-4 border-t border-white/5 bg-black flex items-center gap-2">
           <Clock className="w-3 h-3 text-zinc-600" />
           <span className="text-zinc-600 text-xs font-black uppercase tracking-widest">
-            {new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
           </span>
         </div>
       </div>
