@@ -131,13 +131,19 @@ function CarSilhouette({ color = '#2563eb' }: { color?: string }) {
 
 // ─── Idle Screen ──────────────────────────────────────────────────────────────
 function IdleScreen() {
-  const [time, setTime] = useState(new Date())
+  const [mounted, setMounted] = useState(false)
+  const [time, setTime] = useState<Date | null>(null)
+
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000)
+    setMounted(true)
+    const update = () => setTime(new Date())
+    update()
+    const t = setInterval(update, 1000)
     return () => clearInterval(t)
   }, [])
-  const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
-  const dateStr = time.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+
+  const timeStr = (mounted && time) ? time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : ''
+  const dateStr = (mounted && time) ? time.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-zinc-950">
@@ -154,10 +160,10 @@ function IdleScreen() {
           </h1>
         </div>
         <div className="flex flex-col items-center gap-4">
-          <div className="text-white leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '140px', letterSpacing: '-4px' }}>
+          <div className="text-white leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '140px', letterSpacing: '-4px' }} suppressHydrationWarning>
             {timeStr}
           </div>
-          <p className="text-indigo-400 font-bold text-3xl uppercase tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+          <p className="text-indigo-400 font-bold text-3xl uppercase tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif" }} suppressHydrationWarning>
             {dateStr}
           </p>
         </div>
@@ -352,6 +358,12 @@ function ConfirmedOverlay({ totalAmount, onDone }: { totalAmount: number; onDone
 // ─── Active Checkout Screen ───────────────────────────────────────────────────
 function CheckoutScreen({ state }: { state: KioskState }) {
   const { t } = useLanguage()
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const { transactions, selectedAddons, miscCharges, paymentMethod, cashReceived, totalAmount, balance, stage } = state
   const primaryTx = transactions[0]
   const isMulti = transactions.length > 1
@@ -440,13 +452,19 @@ function CheckoutScreen({ state }: { state: KioskState }) {
     <div className="w-full h-full flex flex-row bg-black overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
       {/* ── LEFT PANEL ─────────────────────────────────────────────── */}
-      <div className="w-2/5 h-full flex flex-col border-r border-white/10 bg-black overflow-hidden p-7">
+      <div className="w-[35%] h-full flex flex-col border-r border-white/10 bg-black overflow-hidden p-7">
         {primaryTx?.imageUrl ? (
           <div className="w-full h-full overflow-hidden border-8 border-white"
             style={{ borderRadius: 32, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={primaryTx.imageUrl} alt="Vehicle" className="w-full h-full object-cover" />
+            <img 
+              src={primaryTx.imageUrl} 
+              alt="Vehicle" 
+              className="w-full h-full object-cover" 
+              loading="lazy"
+              decoding="async"
+            />
           </div>
         ) : (
           <div className="flex-1 flex items-center justify-center p-8">
@@ -456,7 +474,7 @@ function CheckoutScreen({ state }: { state: KioskState }) {
       </div>
 
       {/* ── RIGHT PANEL ────────────────────────────────────────────── */}
-      <div className="w-3/5 h-full flex flex-col bg-zinc-950 overflow-hidden">
+      <div className="flex-1 h-full flex flex-col bg-zinc-950 overflow-hidden">
 
         {/* Header */}
         <div className="px-8 py-5 flex items-center gap-5 border-b border-white/5 bg-black">
@@ -538,13 +556,15 @@ function CheckoutScreen({ state }: { state: KioskState }) {
             </>
           )}
 
-          <div className="h-px bg-white/5 my-2" />
+          <div className="h-4 flex-shrink-0" /> {/* Spacer */}
+        </div>
 
-          {/* Grand Total */}
-          <div
-            className="flex items-center justify-between p-6 rounded-3xl border border-white/10 bg-zinc-900 shadow-xl"
-            style={{ transition: 'transform 0.3s, opacity 0.3s', transform: totalChanged ? 'scale(1.03)' : 'scale(1)', opacity: totalChanged ? 0.8 : 1 }}
-          >
+        {/* Pinned Grand Total */}
+        <div 
+          className="px-8 py-6 border-t border-white/10 bg-zinc-900/50 backdrop-blur-xl"
+          style={{ transition: 'transform 0.3s, opacity 0.3s', transform: totalChanged ? 'scale(1.02)' : 'scale(1)', opacity: totalChanged ? 0.9 : 1 }}
+        >
+          <div className="flex items-center justify-between">
             <div>
               <span className="block text-zinc-500 text-xs font-black uppercase tracking-widest mb-1">{t('payment.totalAmount')}</span>
               <p className="text-zinc-400 text-sm font-bold">
@@ -562,7 +582,9 @@ function CheckoutScreen({ state }: { state: KioskState }) {
         <div className="px-8 py-4 border-t border-white/5 bg-black flex items-center gap-2">
           <Clock className="w-3 h-3 text-zinc-600" />
           <span className="text-zinc-600 text-xs font-black uppercase tracking-widest">
-            {new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })}
+            {mounted 
+              ? new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) 
+              : '--:--'}
           </span>
         </div>
       </div>

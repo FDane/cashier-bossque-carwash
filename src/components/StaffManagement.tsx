@@ -4,10 +4,10 @@ import { useLanguage } from '@/hooks/useLanguage'
 import { 
   Users, 
   LogOut, 
-  Plus, 
   Clock, 
   CheckCircle2,
   ImageIcon,
+  X,
 } from 'lucide-react'
 import {
   listenToTodayAttendance,
@@ -51,10 +51,16 @@ export default function StaffManagement() {
       const cleanup = await listenToTodayAttendance((data) => {
         if (!isMounted) return
         
-        
-        setRows(data)
+        // Sort data by clockInTime ascending (earliest first)
+        const sortedData = [...data].sort((a, b) => {
+          const timeA = a.clockInTime?.toDate ? a.clockInTime.toDate().getTime() : new Date(a.clockInTime || 0).getTime();
+          const timeB = b.clockInTime?.toDate ? b.clockInTime.toDate().getTime() : new Date(b.clockInTime || 0).getTime();
+          return timeA - timeB;
+        });
+
+        setRows(sortedData)
         const sel: Record<string, boolean> = {}
-        data.forEach((r: any) => (sel[r.id] = false))
+        sortedData.forEach((r: any) => (sel[r.id] = false))
         setSelected(sel)
       })
 
@@ -137,7 +143,7 @@ export default function StaffManagement() {
           </h2>
         </div>
 
-        <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 p-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
+        <div className="flex items-center justify-between sm:justify-start gap-3 bg-white dark:bg-zinc-900 p-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm w-full sm:w-auto">
           <label className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-colors">
             <input 
               type="checkbox" 
@@ -161,7 +167,80 @@ export default function StaffManagement() {
 
       {/* Main Table Card */}
       <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl shadow-premium-lg overflow-hidden">
-        <div className="overflow-x-auto">
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-zinc-100 dark:divide-zinc-800">
+          {rows.length === 0 && (
+            <div className="py-12 text-center text-zinc-500 dark:text-zinc-400 font-medium">
+              {t('staff.noClockInYet' as any)}
+            </div>
+          )}
+          {rows.map((r) => (
+            <div 
+              key={r.id} 
+              className={`p-4 flex items-start gap-4 transition-colors ${selected[r.id] ? 'bg-blue-500/5' : 'active:bg-zinc-50 dark:active:bg-zinc-800/50'}`}
+              onClick={() => toggleSelect(r.id)}
+            >
+              <div className="pt-1" onClick={(e) => e.stopPropagation()}>
+                <input
+                  type="checkbox"
+                  checked={!!selected[r.id]}
+                  onChange={() => toggleSelect(r.id)}
+                  className="w-6 h-6 rounded-md accent-blue-600 cursor-pointer"
+                />
+              </div>
+              
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-3 mb-3">
+                  {r.imageUrl ? (
+                    <img 
+                      src={r.imageUrl} 
+                      alt="" 
+                      className="w-12 h-12 rounded-2xl object-cover border-2 border-zinc-100 dark:border-zinc-800 shadow-sm"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-2xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center border-2 border-zinc-100 dark:border-zinc-800 shadow-sm">
+                      <ImageIcon className="w-5 h-5 text-zinc-400" />
+                    </div>
+                  )}
+                  <div className="truncate">
+                    <div className="font-black text-zinc-900 dark:text-white truncate">
+                      {staffMap[r.staffId]?.name || staffMap[r.staffId]?.displayName || r.staffId}
+                    </div>
+                    <div className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">
+                      ID: {r.staffId.slice(-6)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-tighter mb-1">{t('staff.checkIn' as any)}</div>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 font-mono">
+                      <Clock className="w-3 h-3 text-blue-500" />
+                      {r.clockInTime?.toDate ? r.clockInTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                    </div>
+                  </div>
+                  <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800">
+                    <div className="text-[10px] font-black text-zinc-400 uppercase tracking-tighter mb-1">{t('staff.checkOut' as any)}</div>
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 font-mono">
+                      {r.clockOutTime ? (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 text-green-500" />
+                          {r.clockOutTime.toDate ? r.clockOutTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+                        </>
+                      ) : (
+                        <span className="text-[9px] text-amber-600 dark:text-amber-400 font-black uppercase bg-amber-500/10 px-1.5 py-0.5 rounded">Active</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full table-auto border-separate" style={{ borderSpacing: '0 8px' }}>
             {rows.length === 0 && (
               <caption className="py-12 text-center text-zinc-500 dark:text-zinc-400 text-lg font-medium">
@@ -254,7 +333,7 @@ export default function StaffManagement() {
                 onClick={() => setViewingImageUrl(null)}
                 className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
               >
-                <Plus className="w-6 h-6 rotate-45" />
+                <X className="w-6 h-6" />
               </button>
             </div>
             <div className="p-4">
