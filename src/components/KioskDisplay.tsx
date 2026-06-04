@@ -146,35 +146,35 @@ function IdleScreen() {
   const dateStr = (mounted && time) ? time.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''
 
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-zinc-950">
+    <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-zinc-50">
       <div className="idle-bg absolute inset-0" />
-      <div className="absolute inset-0 opacity-5"
-        style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }}
+      <div className="absolute inset-0 opacity-[0.03]"
+        style={{ backgroundImage: 'radial-gradient(#000000 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}
       />
       <div className="relative z-10 flex flex-col items-center gap-8 text-center px-8">
         <div className="flex flex-col items-center gap-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src="/logo.png" alt="Bossque Carwash Logo" width={120} height={120} className="rounded-2xl object-contain shadow-2xl" />
-          <h1 className="text-center font-black text-6xl tracking-widest text-white uppercase" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
-            CARWASH <span style={{ color: '#818cf8' }}>BOSSQUE</span>
+          <h1 className="text-center font-black text-6xl tracking-widest text-zinc-900 uppercase" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+            CARWASH <span className="text-blue-600">BOSSQUE</span>
           </h1>
         </div>
         <div className="flex flex-col items-center gap-4">
-          <div className="text-white leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '140px', letterSpacing: '-4px' }} suppressHydrationWarning>
+          <div className="text-zinc-900 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '140px', letterSpacing: '-4px' }} suppressHydrationWarning>
             {timeStr}
           </div>
-          <p className="text-indigo-400 font-bold text-3xl uppercase tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif" }} suppressHydrationWarning>
+          <p className="text-indigo-600 font-bold text-3xl uppercase tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif" }} suppressHydrationWarning>
             {dateStr}
           </p>
         </div>
-        <p className="text-zinc-500 text-sm font-bold uppercase tracking-widest">
+        <p className="text-zinc-400 text-sm font-bold uppercase tracking-widest">
           Selamat Datang • Sila Tunggu Sebentar
         </p>
       </div>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .idle-bg { background: #09090b; animation: idlePulse 10s ease-in-out infinite; }
-        @keyframes idlePulse { 0%,100%{background-color:#09090b} 50%{background-color:#0f0f1a} }
+        .idle-bg { background: #f9fafb; animation: idlePulse 10s ease-in-out infinite; }
+        @keyframes idlePulse { 0%,100%{background-color:#f9fafb} 50%{background-color:#f3f4f6} }
       `}</style>
     </div>
   )
@@ -197,13 +197,13 @@ function PaymentPopup({
 
   if (paymentMethod === 'CASH') {
     return (
-      <div className="flex flex-col items-center gap-8 border border-white/10 bg-zinc-900"
-        style={{ padding: 48, borderRadius: 48, maxWidth: '95%', width: 560, boxShadow: '0 40px 80px rgba(0,0,0,0.7)' }}
+      <div className="flex flex-col items-center gap-8 border border-zinc-200 bg-white"
+        style={{ padding: 48, borderRadius: 48, maxWidth: '95%', width: 560, boxShadow: '0 40px 80px rgba(0,0,0,0.15)' }}
       >
         {/* Method badge */}
-        <div className="flex items-center gap-3 px-7 py-3" style={{ background: 'rgba(16,185,129,0.12)', borderRadius: 100 }}>
+        <div className="flex items-center gap-3 px-7 py-3" style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 100 }}>
           <Banknote className="w-7 h-7 text-emerald-400" />
-          <span className="font-black text-emerald-400 uppercase tracking-widest text-xl">{t('payment.cash')}</span>
+          <span className="font-black text-emerald-600 uppercase tracking-widest text-xl">{t('payment.cash')}</span>
         </div>
 
         {/* "Transaksi Diproses" status badge */}
@@ -222,20 +222,20 @@ function PaymentPopup({
         {/* Amounts */}
         <div className="text-center w-full flex flex-col gap-5">
           <div>
-            <span className="block text-zinc-400 text-xs font-black uppercase tracking-widest mb-2">{t('payment.totalAmount')}</span>
-            <div className="text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 100, lineHeight: 1 }}>
+            <span className="block text-zinc-500 text-xs font-black uppercase tracking-widest mb-2">{t('payment.totalAmount')}</span>
+            <div className="text-zinc-900" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 100, lineHeight: 1 }}>
               {fmt(totalAmount)}
             </div>
           </div>
           {cashReceived > 0 && (
-            <div className="bg-white/5 border border-white/10 rounded-3xl p-7 flex flex-col gap-4">
+            <div className="bg-zinc-50 border border-zinc-200 rounded-3xl p-7 flex flex-col gap-4">
               <div className="flex justify-between items-center">
-                <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">{t('payment.amountReceived')}</span>
-                <span className="text-emerald-400 font-black text-2xl">{fmt(cashReceived)}</span>
+                <span className="text-zinc-500 text-xs font-black uppercase tracking-widest">{t('payment.amountReceived')}</span>
+                <span className="text-emerald-600 font-black text-2xl">{fmt(cashReceived)}</span>
               </div>
-              <div className="h-px bg-white/10" />
+              <div className="h-px bg-zinc-200" />
               <div className="flex justify-between items-center">
-                <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">{t('payment.balance')}</span>
+                <span className="text-zinc-500 text-xs font-black uppercase tracking-widest">{t('payment.balance')}</span>
                 <span className="font-black text-2xl" style={{ color: balance >= 0 ? '#60a5fa' : '#fb7185' }}>
                   {balance >= 0 ? fmt(balance) : '...'}
                 </span>
@@ -250,13 +250,13 @@ function PaymentPopup({
 
   // ONLINE / QR
   return (
-    <div className="flex flex-col items-center gap-6 border border-white/10 bg-zinc-900"
-      style={{ padding: 48, borderRadius: 48, maxWidth: '95%', width: 520, boxShadow: '0 40px 80px rgba(0,0,0,0.7)' }}
+    <div className="flex flex-col items-center gap-6 border border-zinc-200 bg-white"
+      style={{ padding: 48, borderRadius: 48, maxWidth: '95%', width: 520, boxShadow: '0 40px 80px rgba(0,0,0,0.15)' }}
     >
       {/* Method badge */}
-      <div className="flex items-center gap-3 px-7 py-3" style={{ background: 'rgba(79,70,229,0.12)', borderRadius: 100 }}>
+      <div className="flex items-center gap-3 px-7 py-3" style={{ background: 'rgba(79,70,229,0.08)', borderRadius: 100 }}>
         <CreditCard className="w-7 h-7 text-indigo-400" />
-        <span className="font-black text-indigo-400 uppercase tracking-widest text-xl">{t('payment.online')}</span>
+        <span className="font-black text-indigo-600 uppercase tracking-widest text-xl">{t('payment.online')}</span>
       </div>
 
       {/* "Transaksi Diproses" status badge */}
@@ -273,7 +273,7 @@ function PaymentPopup({
       </div>
 
       {/* QR code */}
-      <div className="bg-white p-4" style={{ width: 280, height: 280, borderRadius: 28 }}>
+      <div className="bg-white p-4 border border-zinc-100 shadow-sm" style={{ width: 280, height: 280, borderRadius: 28 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/qr-payment.png"
@@ -282,10 +282,10 @@ function PaymentPopup({
           onError={(e) => { (e.target as HTMLImageElement).src = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=BossqueCarwash' }}
         />
       </div>
-      <p className="text-center text-zinc-400 font-bold text-lg" style={{ maxWidth: 340, lineHeight: 1.4 }}>
+      <p className="text-center text-zinc-500 font-bold text-lg" style={{ maxWidth: 340, lineHeight: 1.4 }}>
         {t('payment.qrInstruction')}
       </p>
-      <div className="text-indigo-400 font-black" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 60, letterSpacing: 2 }}>
+      <div className="text-indigo-600 font-black" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 60, letterSpacing: 2 }}>
         {fmt(totalAmount)}
       </div>
     </div>
@@ -314,12 +314,12 @@ function ConfirmedOverlay({ totalAmount, onDone }: { totalAmount: number; onDone
   return (
     <div
       className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-10"
-      style={{ background: 'rgba(0,0,0,0.95)' }}
+      style={{ background: 'rgba(255,255,255,0.98)' }}
     >
       {/* Big check icon */}
       <div
         className="flex items-center justify-center"
-        style={{ width: 120, height: 120, borderRadius: '50%', background: 'rgba(16,185,129,0.12)', border: '2px solid rgba(16,185,129,0.3)' }}
+        style={{ width: 120, height: 120, borderRadius: '50%', background: 'rgba(16,185,129,0.08)', border: '2px solid rgba(16,185,129,0.15)' }}
       >
         <CheckCircle2 className="text-emerald-400" style={{ width: 64, height: 64 }} />
       </div>
@@ -328,24 +328,24 @@ function ConfirmedOverlay({ totalAmount, onDone }: { totalAmount: number; onDone
       <div className="flex flex-col items-center gap-4 text-center">
         <div
           className="flex items-center gap-3 px-8 py-3"
-          style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 100 }}
+          style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 100 }}
         >
           <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-          <span className="text-emerald-400 font-black text-lg uppercase tracking-widest">Transaksi Diterima</span>
+          <span className="text-emerald-600 font-black text-lg uppercase tracking-widest">Transaksi Diterima</span>
         </div>
 
-        <div className="text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 80, lineHeight: 1 }}>
+        <div className="text-zinc-900" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 80, lineHeight: 1 }}>
           {fmt(totalAmount)}
         </div>
 
-        <p className="text-emerald-300 font-bold text-2xl">Terima kasih! Sila datang lagi 🚗</p>
-        <p className="text-zinc-600 font-bold text-sm uppercase tracking-widest">
+        <p className="text-emerald-600 font-bold text-2xl">Terima kasih! Sila datang lagi 🚗</p>
+        <p className="text-zinc-500 font-bold text-sm uppercase tracking-widest">
           Paparan akan dikosongkan dalam {countdown}s
         </p>
       </div>
 
       {/* Countdown bar */}
-      <div className="w-64 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+      <div className="w-64 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
         <div
           className="h-full bg-emerald-400 rounded-full countdown-bar"
           style={{ animationDuration: `${CONFIRMED_MS}ms` }}
@@ -449,12 +449,12 @@ function CheckoutScreen({ state }: { state: KioskState }) {
   const showPaymentPopupConfirming = paymentMethod !== null && popupPhase === 'confirmed' && stage === 'payment'
 
   return (
-    <div className="w-full h-full flex flex-row bg-black overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
+    <div className="w-full h-full flex flex-row bg-zinc-100 overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
 
       {/* ── LEFT PANEL ─────────────────────────────────────────────── */}
-      <div className="w-[35%] h-full flex flex-col border-r border-white/10 bg-black overflow-hidden p-7">
+      <div className="w-[35%] h-full flex flex-col border-r border-zinc-200 bg-zinc-50 overflow-hidden p-7">
         {primaryTx?.imageUrl ? (
-          <div className="w-full h-full overflow-hidden border-8 border-white"
+          <div className="w-full h-full overflow-hidden border-8 border-white shadow-xl"
             style={{ borderRadius: 32, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -474,23 +474,23 @@ function CheckoutScreen({ state }: { state: KioskState }) {
       </div>
 
       {/* ── RIGHT PANEL ────────────────────────────────────────────── */}
-      <div className="flex-1 h-full flex flex-col bg-zinc-950 overflow-hidden">
+      <div className="flex-1 h-full flex flex-col bg-white overflow-hidden">
 
         {/* Header */}
-        <div className="px-8 py-5 flex items-center gap-5 border-b border-white/5 bg-black">
+        <div className="px-8 py-5 flex items-center gap-5 border-b border-zinc-200 bg-zinc-50">
           <div className="w-12 h-12 flex items-center justify-center flex-shrink-0"
             style={{ borderRadius: 14, background: 'linear-gradient(135deg,#2563eb,#7c3aed)' }}
           >
             <Car className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-white leading-none mb-1 truncate"
+            <div className="text-zinc-900 leading-none mb-1 truncate"
               style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 46, letterSpacing: 3 }}
             >
               {isMulti ? transactions.map(tx => tx.plateNumber).join(' · ') : primaryTx?.plateNumber}
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-zinc-400 text-xs font-bold uppercase tracking-wider">
+              <span className="text-zinc-500 text-xs font-bold uppercase tracking-wider">
                 {!isMulti ? `${primaryTx?.brand} ${primaryTx?.model}` : `${transactions.length} ${t('payment.batch')}`}
               </span>
               <span className="w-1 h-1 rounded-full bg-zinc-600 inline-block" />
@@ -561,27 +561,27 @@ function CheckoutScreen({ state }: { state: KioskState }) {
 
         {/* Pinned Grand Total */}
         <div 
-          className="px-8 py-6 border-t border-white/10 bg-zinc-900/50 backdrop-blur-xl"
-          style={{ transition: 'transform 0.3s, opacity 0.3s', transform: totalChanged ? 'scale(1.02)' : 'scale(1)', opacity: totalChanged ? 0.9 : 1 }}
+          className="px-8 py-6 border-t border-zinc-200 bg-zinc-50"
+          style={{ transition: 'transform 0.3s, opacity 0.3s', transform: totalChanged ? 'scale(1.02)' : 'scale(1)', opacity: totalChanged ? 0.95 : 1 }}
         >
           <div className="flex items-center justify-between">
             <div>
-              <span className="block text-zinc-500 text-xs font-black uppercase tracking-widest mb-1">{t('payment.totalAmount')}</span>
-              <p className="text-zinc-400 text-sm font-bold">
+              <span className="block text-zinc-600 text-xs font-black uppercase tracking-widest mb-1">{t('payment.totalAmount')}</span>
+              <p className="text-zinc-500 text-sm font-bold">
                 {t('payment.totalCars')} {transactions.length}
                 {selectedAddons.length > 0 ? ` + ${selectedAddons.length} item` : ''}
               </p>
             </div>
-            <div className="text-white" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 68 }}>
+            <div className="text-zinc-900" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 68 }}>
               {fmt(totalAmount)}
             </div>
           </div>
         </div>
 
         {/* Footer */}
-        <div className="px-8 py-4 border-t border-white/5 bg-black flex items-center gap-2">
-          <Clock className="w-3 h-3 text-zinc-600" />
-          <span className="text-zinc-600 text-xs font-black uppercase tracking-widest">
+        <div className="px-8 py-4 border-t border-zinc-100 bg-zinc-50 flex items-center gap-2">
+          <Clock className="w-3 h-3 text-zinc-400" />
+          <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">
             {mounted 
               ? new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) 
               : '--:--'}
@@ -591,7 +591,7 @@ function CheckoutScreen({ state }: { state: KioskState }) {
 
       {/* ── PAYMENT POPUP (Diproses / Diterima label) ───────────────── */}
       {(showPaymentPopup || showPaymentPopupConfirming) && paymentMethod && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.92)' }}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.9)' }}>
           <PaymentPopup
             paymentMethod={paymentMethod}
             totalAmount={totalAmount}
@@ -621,9 +621,9 @@ function CheckoutScreen({ state }: { state: KioskState }) {
         .countdown-bar { animation: shrink linear forwards; }
         @keyframes shrink { from{width:100%} to{width:0%} }
 
-        ::-webkit-scrollbar       { width: 4px; }
-        ::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+        ::-webkit-scrollbar       { width: 6px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.02); }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
       `}</style>
     </div>
   )
@@ -632,10 +632,10 @@ function CheckoutScreen({ state }: { state: KioskState }) {
 // ─── Helper components ────────────────────────────────────────────────────────
 function InfoTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
-    <div className="bg-zinc-900 rounded-2xl p-3 border border-white/5">
-      <span className="block text-zinc-500 text-xs font-black uppercase tracking-widest mb-1">{label}</span>
-      <div className="text-white font-extrabold text-base flex items-center gap-1.5 truncate">
-        {accent && <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-white/10" style={{ background: accent }} />}
+    <div className="bg-zinc-50 rounded-2xl p-3 border border-zinc-200">
+      <span className="block text-zinc-600 text-xs font-black uppercase tracking-widest mb-1">{label}</span>
+      <div className="text-zinc-900 font-extrabold text-base flex items-center gap-1.5 truncate">
+        {accent && <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-black/5" style={{ background: accent }} />}
         {value}
       </div>
     </div>
@@ -645,9 +645,9 @@ function InfoTile({ label, value, accent }: { label: string; value: string; acce
 function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (
     <div className="flex items-center gap-2 mt-4 mb-1">
-      <span className="text-zinc-500">{icon}</span>
-      <span className="text-zinc-500 text-xs font-black uppercase tracking-widest">{label}</span>
-      <div className="flex-1 h-px bg-white/5" />
+      <span className="text-zinc-400">{icon}</span>
+      <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">{label}</span>
+      <div className="flex-1 h-px bg-zinc-100" />
     </div>
   )
 }
@@ -656,14 +656,14 @@ function LineItem({ label, sublabel, amount, accent, delay }: {
   label: string; sublabel?: string; amount: number; accent?: boolean; delay?: number
 }) {
   return (
-    <div className="flex items-center justify-between px-5 py-4 rounded-2xl bg-zinc-900/60 border border-white/5"
+    <div className="flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-zinc-200"
       style={{ transition: 'opacity 0.3s', transitionDelay: `${(delay || 0) * 80}ms` }}
     >
       <div className="min-w-0 mr-4">
-        <span className="text-zinc-200 font-bold text-sm block truncate">{label}</span>
+        <span className="text-zinc-900 font-bold text-sm block truncate">{label}</span>
         {sublabel && <span className="text-zinc-500 text-xs font-bold mt-0.5 uppercase tracking-wider block">{sublabel}</span>}
       </div>
-      <div className="font-black text-lg flex-shrink-0 tabular-nums" style={{ color: accent ? '#818cf8' : '#d4d4d8' }}>
+      <div className="font-black text-lg flex-shrink-0 tabular-nums" style={{ color: accent ? '#2563eb' : '#3f3f46' }}>
         {fmt(amount)}
       </div>
     </div>
@@ -674,7 +674,7 @@ function LineItem({ label, sublabel, amount, accent, delay }: {
 export default function KioskDisplay() {
   const state = useKioskState()
   return (
-    <div className="w-screen h-screen overflow-hidden bg-zinc-950">
+    <div className="w-screen h-screen overflow-hidden bg-zinc-100">
       {state.stage === 'idle' || state.transactions.length === 0
         ? <IdleScreen />
         : <CheckoutScreen state={state} />

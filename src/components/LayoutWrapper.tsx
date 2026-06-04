@@ -9,7 +9,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
   // Kiosk mode: No header, no container padding, pure black background for OLED tablets
   if (isKiosk) {
-    return <div className="fixed inset-0 bg-black overflow-hidden">{children}</div>
+    return <div className="fixed inset-0 bg-zinc-50 overflow-hidden">{children}</div>
   }
 
   return (
