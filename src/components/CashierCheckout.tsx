@@ -117,6 +117,7 @@ export default function CashierCheckout({
   // State for viewing image in a modal
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null)
   const checkoutImageInputRef = React.useRef<HTMLInputElement>(null)
+  const editImageInputRef = React.useRef<HTMLInputElement>(null)
 
   // State to store customer data for each plate number
   const [transactionCustomers, setTransactionCustomers] = useState<Record<string, any>>({});
@@ -353,6 +354,37 @@ export default function CashierCheckout({
       } finally {
         setProcessingId(null)
         if (checkoutImageInputRef.current) checkoutImageInputRef.current.value = ''
+      }
+    }
+  }
+
+  const handleEditImageCapture = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file && editingTransaction) {
+      setProcessingId(editingTransaction.id)
+      try {
+        const compressedImageFile = await resizeImage(file)
+        const { imageUrl, imagePath } = await uploadImageToFirebase(
+          compressedImageFile,
+          editingTransaction.id,
+          editingTransaction.plateNumber,
+          editingTransaction.imagePath || undefined
+        )
+
+        await updateTransaction(editingTransaction.id, { imageUrl, imagePath })
+
+        setEditingTransaction({
+          ...editingTransaction,
+          imageUrl,
+          imagePath
+        })
+        showToast.success(t('payment.imageUploadSuccess' as any) || 'Image uploaded successfully')
+      } catch (error) {
+        console.error('Error uploading edit image:', error)
+        showToast.error(t('payment.imageUploadError' as any) || 'Failed to upload image')
+      } finally {
+        setProcessingId(null)
+        if (editImageInputRef.current) editImageInputRef.current.value = ''
       }
     }
   }
@@ -768,7 +800,7 @@ export default function CashierCheckout({
 
       {/* Checkout Modal */}
       {checkoutModal.transactions.length > 0 && (
-        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-end sm:items-center justify-center p-0 sm:p-4 overflow-y-auto">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-t-[2.5rem] sm:rounded-3xl w-full sm:w-full sm:max-w-xl max-h-[90vh] overflow-y-auto shadow-2xl animate-in slide-in-from-bottom duration-300">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white dark:bg-zinc-900 border-b border-zinc-100 dark:border-zinc-800 px-6 sm:px-8 py-5 flex justify-between items-center">
@@ -1198,7 +1230,7 @@ export default function CashierCheckout({
 
       {/* Edit Modal */}
       {editingTransaction && (
-        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200">
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
               <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{t('cashier.editTitle' as any) || 'Edit Car Details'}</h3>
@@ -1210,7 +1242,7 @@ export default function CashierCheckout({
               </button>
             </div>
             
-            <div className="p-6 space-y-6">
+            <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">{t('intake.plateNumber' as any)}</label>
@@ -1324,6 +1356,50 @@ export default function CashierCheckout({
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Image Section in Edit Modal */}
+                <div className="rounded-3xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50 dark:bg-zinc-900/50">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-1">
+                        {t('payment.vehiclePhoto' as any) || 'Vehicle Photo'}
+                      </div>
+                      <p className="text-[10px] text-zinc-500 font-bold leading-tight">
+                        {t('payment.vehiclePhotoNote' as any) || 'Upload or update vehicle photo.'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={processingId === editingTransaction.id}
+                      onClick={() => editImageInputRef.current?.click()}
+                      className="inline-flex items-center gap-2 rounded-xl border-2 border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-zinc-700 dark:text-zinc-200 hover:border-blue-500 transition-all disabled:opacity-50"
+                    >
+                      {processingId === editingTransaction.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Camera className="w-3.5 h-3.5" />
+                      )}
+                      {editingTransaction.imageUrl ? (t('payment.changePhoto' as any) || 'Change') : (t('payment.uploadPhoto' as any) || 'Upload')}
+                    </button>
+                  </div>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
+                    ref={editImageInputRef}
+                    onChange={handleEditImageCapture}
+                    className="hidden"
+                  />
+                  {editingTransaction.imageUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setViewingImageUrl(editingTransaction.imageUrl || null)}
+                      className="mt-3 text-[10px] font-black uppercase tracking-wider text-blue-600 dark:text-blue-400 hover:underline text-left block"
+                    >
+                      {t('payment.viewUploadedPhoto' as any) || 'View photo'}
+                    </button>
+                  )}
                 </div>
 
                 <div>

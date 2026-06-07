@@ -530,7 +530,7 @@ export default function Dashboard() {
       </main>
       {/* Adjustment Modal */}
       {showAdjModal && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <form onSubmit={handleAddAdjustment} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
               <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
@@ -538,7 +538,7 @@ export default function Dashboard() {
               </h3>
               <button type="button" onClick={() => setShowAdjModal(null)} className="p-2 text-zinc-400 hover:text-white"><X /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
               <div>
                 <label className="block text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">{t('stats.amount' as any)}</label>
                 <input
@@ -706,13 +706,13 @@ export default function Dashboard() {
 
       {/* Staff Advance Modal */}
       {showAdvanceModal && (
-        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
           <form onSubmit={handleAddAdvance} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in duration-200">
             <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
               <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{t('staff.addAdvance' as any)}</h3>
               <button type="button" onClick={() => setShowAdvanceModal(false)} className="p-2 text-zinc-400 hover:text-white"><X /></button>
             </div>
-            <div className="p-6 space-y-4">
+            <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto custom-scrollbar">
               <div>
                 <label className="block text-xs font-black text-zinc-500 uppercase tracking-widest mb-2">{t('staff.name' as any)}</label>
                 <select

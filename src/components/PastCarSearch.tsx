@@ -21,6 +21,7 @@ import { formatCurrency, getKLDateString } from '@/lib/utils'
 export default function PastCarSearch() {
   const { t } = useLanguage()
   const [plate, setPlate] = useState('')
+  const dateInputRef = React.useRef<HTMLInputElement>(null)
   const [selectedDate, setSelectedDate] = useState(getKLDateString())
   const [searchMode, setSearchMode] = useState<'DATE' | 'GLOBAL'>('DATE')
   const [results, setResults] = useState<any[]>([])
@@ -184,9 +185,13 @@ export default function PastCarSearch() {
             </div>
           )} 
           {searchMode === 'DATE' && (
-            <div className="relative flex-1">
+            <div 
+              className="relative flex-1 cursor-pointer"
+              onClick={() => dateInputRef.current?.showPicker?.()}
+            >
               <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
               <input
+                ref={dateInputRef}
                 type="date"
                 value={selectedDate}
                 onChange={(e) => setSelectedDate(e.target.value)}
