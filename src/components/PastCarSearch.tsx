@@ -1,14 +1,14 @@
 "use client"
 import React, { useState, useEffect, useMemo } from 'react'
-import { 
-  getPastTransactions 
+import {
+  getPastTransactions
 } from '@/lib/firebaseService'
 import { useLanguage } from '@/hooks/useLanguage'
-import { 
-  History, 
-  Search, 
-  Car, 
-  Loader2, 
+import {
+  History,
+  Search,
+  Car,
+  Loader2,
   Calendar,
   Clock,
   ChevronLeft,
@@ -17,6 +17,7 @@ import {
   Image as ImageIcon
 } from 'lucide-react'
 import { formatCurrency, getKLDateString } from '@/lib/utils'
+import toast from 'react-hot-toast'
 
 export default function PastCarSearch() {
   const { t } = useLanguage()
@@ -45,7 +46,7 @@ export default function PastCarSearch() {
   useEffect(() => {
     if (searchMode === 'DATE') { // For DATE mode, perform regular paginated search
       handleSearch();
-    } 
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewLimit, selectedDate, searchMode]);
 
@@ -56,7 +57,7 @@ export default function PastCarSearch() {
     const timer = setTimeout(() => {
       // For global search with a plate, we want to fetch ALL prefix-matching records
       // to allow client-side substring filtering across the entire result set.
-      handleSearch(undefined, true); 
+      handleSearch(undefined, true);
     }, 500);
 
     return () => clearTimeout(timer);
@@ -80,7 +81,7 @@ export default function PastCarSearch() {
     const search = plate.trim().toUpperCase()
     // We filter locally so that "letter-by-letter" works for substrings (e.g. "2" in the middle of a plate)
     if (!search) return results // If no search term, show all fetched results
-    return results.filter(r => 
+    return results.filter(r =>
       r.plateNumber?.toUpperCase().includes(search)
     )
   }, [results, plate])
@@ -112,18 +113,18 @@ export default function PastCarSearch() {
       // 2. plateNumber filter as a prefix search (e.g., where('plateNumber', '>=', plate) and where('plateNumber', '<=', plate + '\uf8ff'))
       // 3. Conditional orderBy based on whether plateNumber is present (e.g., orderBy('plateNumber') for global, orderBy('checkInTime') for date).
       const snapshot = await getPastTransactions(
-        queryLimit, 
+        queryLimit,
         queryPlate,
-        queryStartAfter, 
-        queryEndBefore,  
+        queryStartAfter,
+        queryEndBefore,
         queryDate
       );
 
       const rows = snapshot.docs.map(d => ({ id: d.id, ...d.data() }))
       setResults(rows)
-      
+
       // Update pagination state only if we are actually paginating (i.e., not global plate search fetching all)
-      if (searchMode === 'DATE' || (searchMode === 'GLOBAL' && !queryPlate)) { 
+      if (searchMode === 'DATE' || (searchMode === 'GLOBAL' && !queryPlate)) {
         setFirstDoc(snapshot.docs[0])
         setLastDoc(snapshot.docs[snapshot.docs.length - 1])
         if (direction === 'next') setCurrentPage(p => p + 1)
@@ -140,6 +141,36 @@ export default function PastCarSearch() {
     }
   }
 
+  const handlePrintReceipt = async (transaction: any) => {
+  try {
+    const printData = {
+      plateNumber: transaction.plateNumber,
+      services: transaction.services,
+      basePrice: transaction.computedPrice || 0,
+      addons: transaction.addons || [],
+      miscCharges: transaction.miscCharges || [],
+      paymentMethod: transaction.paymentMethod,
+      cashReceived: transaction.cashReceived || 0,
+      change: transaction.change || 0,
+      totalAmount: calculateTotal(transaction),
+    }
+
+    const res = await fetch('https://printer.bossque.my/print', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(printData),
+    })
+
+    if (res.ok) {
+      toast.success(t('pastCars.printSuccess' as any) || 'Receipt printed successfully!')
+    } else {
+      toast.error(t('pastCars.printFailed' as any) || 'Print failed. Is the printer server running?')
+    }
+  } catch (err) {
+    toast.error(t('pastCars.printError' as any) || 'Cannot connect to printer server.')
+  }
+}
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Header */}
@@ -154,13 +185,13 @@ export default function PastCarSearch() {
 
       {/* Search Mode Toggles */}
       <div className="flex gap-2 p-1 bg-zinc-100 dark:bg-zinc-800 rounded-2xl w-fit">
-        <button 
+        <button
           onClick={() => { setSearchMode('DATE'); setResults([]); setPlate(''); }}
           className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${searchMode === 'DATE' ? 'bg-white dark:bg-zinc-900 text-blue-600 shadow-sm' : 'text-zinc-500'}`}
         >
           {t('pastCars.byDate' as any)}
         </button>
-        <button 
+        <button
           onClick={() => { setSearchMode('GLOBAL'); setResults([]); setPlate(''); }}
           className={`px-4 py-2 rounded-xl text-sm font-bold transition-all ${searchMode === 'GLOBAL' ? 'bg-white dark:bg-zinc-900 text-blue-600 shadow-sm' : 'text-zinc-500'}`}
         >
@@ -183,9 +214,9 @@ export default function PastCarSearch() {
                 className="w-full bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 rounded-2xl pl-14 pr-6 py-4 text-xl font-mono font-bold text-zinc-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all shadow-sm"
               />
             </div>
-          )} 
+          )}
           {searchMode === 'DATE' && (
-            <div 
+            <div
               className="relative flex-1 cursor-pointer"
               onClick={() => dateInputRef.current?.showPicker?.()}
             >
@@ -199,7 +230,7 @@ export default function PastCarSearch() {
               />
             </div>
           )}
-          <button 
+          <button
             className={`px-8 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-500/20 flex items-center justify-center gap-3 disabled:opacity-50 active:scale-95 ${searchMode === 'GLOBAL' && plate.trim() !== '' ? 'flex-1' : ''}`}
             onClick={() => handleSearch()}
             disabled={loading}
@@ -232,17 +263,17 @@ export default function PastCarSearch() {
               </thead>
               <tbody>
                 {filteredResults.map((r) => (
-                  <tr 
-                    key={r.id} 
+                  <tr
+                    key={r.id}
                     onClick={() => setSelectedTransaction(r)}
                     className="group bg-zinc-50/50 dark:bg-zinc-800/30 hover:bg-zinc-100 dark:hover:bg-zinc-800/50 transition-colors cursor-pointer"
                   >
                     <td className="py-5 px-8 rounded-l-2xl">
                       {r.imageUrl ? (
-                        <img 
-                          src={r.imageUrl} 
-                          alt="" 
-                          className="w-12 h-12 rounded-xl object-cover shadow-sm" 
+                        <img
+                          src={r.imageUrl}
+                          alt=""
+                          className="w-12 h-12 rounded-xl object-cover shadow-sm"
                         />
                       ) : (
                         <div className="w-12 h-12 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-400">
@@ -272,9 +303,8 @@ export default function PastCarSearch() {
                     </td>
                     <td className="py-5 px-4">
                       {r.paymentMethod && (
-                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                          r.paymentMethod === 'CASH' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-indigo-500/10 text-indigo-600'
-                        }`}>
+                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${r.paymentMethod === 'CASH' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-indigo-500/10 text-indigo-600'
+                          }`}>
                           {r.paymentMethod}
                         </span>
                       )}
@@ -312,7 +342,7 @@ export default function PastCarSearch() {
                     <option value={50}>50</option>
                   </select>
                 </div>
-                
+
                 <div className="flex items-center gap-4">
                   <button
                     onClick={() => handleSearch('prev')}
@@ -358,13 +388,13 @@ export default function PastCarSearch() {
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="p-6 sm:p-8 space-y-8">
               {selectedTransaction.imageUrl && (
                 <div className="relative rounded-2xl overflow-hidden shadow-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950 flex justify-center">
-                  <img 
-                    src={selectedTransaction.imageUrl} 
-                    alt="Vehicle" 
+                  <img
+                    src={selectedTransaction.imageUrl}
+                    alt="Vehicle"
                     className="w-full h-auto max-h-[500px] object-contain"
                   />
                 </div>
@@ -398,9 +428,8 @@ export default function PastCarSearch() {
                 </div>
                 <div>
                   <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-2">{t('payment.paymentMethod' as any)}</p>
-                  <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                    selectedTransaction.paymentMethod === 'CASH' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-indigo-500/10 text-indigo-600'
-                  }`}>
+                  <span className={`inline-flex px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${selectedTransaction.paymentMethod === 'CASH' ? 'bg-emerald-500/10 text-emerald-600' : 'bg-indigo-500/10 text-indigo-600'
+                    }`}>
                     {selectedTransaction.paymentMethod || 'N/A'}
                   </span>
                 </div>
@@ -455,13 +484,19 @@ export default function PastCarSearch() {
                 )}
               </div>
 
-              <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="pt-6 border-t border-zinc-100 dark:border-zinc-800 space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-bold text-zinc-500 uppercase tracking-widest">{t('payment.total:' as any) || 'Total Amount'}</span>
                   <span className="text-3xl font-black text-blue-600 dark:text-blue-400">
                     {formatCurrency(calculateTotal(selectedTransaction))}
                   </span>
                 </div>
+                <button
+                  onClick={() => handlePrintReceipt(selectedTransaction)}
+                  className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-700 text-white font-black text-sm uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
+                >
+                  🖨️ {t('pastCars.printReceipt' as any) || 'Print Receipt'}
+                </button>
               </div>
             </div>
           </div>

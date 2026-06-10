@@ -96,6 +96,10 @@ export const translations = {
     'pastCars.search': 'Search Plate Records',
     'pastCars.byDate': 'Search by Date',
     'pastCars.global': 'Global Plate Search',
+    'pastCars.printReceipt': 'Print Receipt',
+    'pastCars.printSuccess': 'Receipt printed successfully!',
+    'pastCars.printFailed': 'Print failed. Is the printer server running?',
+    'pastCars.printError': 'Cannot connect to printer server.',
 
     // Price Book
     'priceBook.title': 'Price List Management',
@@ -327,6 +331,10 @@ export const translations = {
     'pastCars.search': 'Cari Rekod No Plat',
     'pastCars.byDate': 'Cari mengikut Tarikh',
     'pastCars.global': 'Cari No Plat (Global)',
+    'pastCars.printReceipt': 'Cetak Resit',
+    'pastCars.printSuccess': 'Resit berjaya dicetak!',
+    'pastCars.printFailed': 'Gagal mencetak. Adakah pelayan pencetak sedang berjalan?',
+    'pastCars.printError': 'Tidak dapat menyambung ke pelayan pencetak.',
 
     // Price Book
     'priceBook.title': 'Pengurusan Senarai Harga',

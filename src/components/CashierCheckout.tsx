@@ -43,6 +43,7 @@ import { useRouter } from 'next/navigation'
 interface CashierCheckoutProps {
   pendingTransactions: Transaction[]
   loading: boolean
+  printerOnline: boolean
 }
 
 const SERVICE_CATEGORIES = {
@@ -90,6 +91,7 @@ interface CheckoutModalData {
 export default function CashierCheckout({
   pendingTransactions,
   loading: transactionsLoading,
+  printerOnline,
 }: CashierCheckoutProps) {
   const { t, language } = useLanguage()
   const { printReceipt, isPrinting } = usePrinter({ autoRetry: true, retryCount: 2 })
@@ -512,40 +514,64 @@ export default function CashierCheckout({
         checkoutModal.changeDenominations
       )
 
-      // Print receipt for each transaction
+      // Print ONE combined receipt for all transactions (only if printer is online)
+      if (printerOnline)
       try {
-        for (let i = 0; i < checkoutModal.transactions.length; i++) {
-          const trans = checkoutModal.transactions[i]
-          const customer = transactionCustomers[trans.plateNumber]
-          const itemAddons = i === 0 ? checkoutModal.selectedAddons : []
-          const itemMiscCharges = i === 0 ? checkoutModal.miscCharges : []
-          const itemTotal = trans.computedPrice + itemAddons.reduce((s, a) => s + (a.price * a.quantity), 0) + itemMiscCharges.reduce((s, m) => s + m.price, 0)
-
+        if (checkoutModal.transactions.length === 1) {
+          // Single car — print normally
+          const trans = checkoutModal.transactions[0]
           await printReceipt({
             transactionId: trans.id,
             plateNumber: trans.plateNumber,
-            customerName: customer?.name || 'N/A',
             brand: trans.brand,
             model: trans.model,
             color: trans.color,
             services: trans.services,
             basePrice: trans.computedPrice,
-            addons: itemAddons,
-            miscCharges: itemMiscCharges,
+            addons: checkoutModal.selectedAddons,
+            miscCharges: checkoutModal.miscCharges,
             paymentMethod: checkoutModal.paymentMethod,
-            cashReceived: i === 0 ? checkoutModal.cashReceived : undefined,
-            change: i === 0 ? (checkoutModal.paymentMethod === 'CASH' ? balance : 0) : undefined,
-            cashDenominations: i === 0 ? checkoutModal.cashDenominations : undefined,
-            changeDenominations: i === 0 ? checkoutModal.changeDenominations : undefined,
-            totalAmount: itemTotal,
+            cashReceived: checkoutModal.cashReceived,
+            change: checkoutModal.paymentMethod === 'CASH' ? balance : 0,
+            cashDenominations: checkoutModal.cashDenominations,
+            changeDenominations: checkoutModal.changeDenominations,
+            totalAmount: totalWithAddons,
             timestamp: trans.checkInTime instanceof Date ? trans.checkInTime : new Date(trans.checkInTime),
+            notes: checkoutModal.notes || undefined,
+          })
+        } else {
+          // Multiple cars — print ONE combined receipt
+          const firstTrans = checkoutModal.transactions[0]
+          const combinedMiscCharges = [
+            ...checkoutModal.transactions.map(trans => ({
+              name: `${trans.plateNumber} (${trans.brand} ${trans.model})`,
+              price: trans.computedPrice,
+            })),
+            ...checkoutModal.miscCharges,
+          ]
+          await printReceipt({
+            transactionId: firstTrans.id,
+            plateNumber: checkoutModal.transactions.map(t => t.plateNumber).join(', '),
+            brand: '',
+            model: '',
+            color: '',
+            services: { exterior: false, interior: false, engine: false },
+            basePrice: 0,
+            addons: checkoutModal.selectedAddons,
+            miscCharges: combinedMiscCharges,
+            paymentMethod: checkoutModal.paymentMethod,
+            cashReceived: checkoutModal.cashReceived,
+            change: checkoutModal.paymentMethod === 'CASH' ? balance : 0,
+            cashDenominations: checkoutModal.cashDenominations,
+            changeDenominations: checkoutModal.changeDenominations,
+            totalAmount: totalWithAddons,
+            timestamp: firstTrans.checkInTime instanceof Date ? firstTrans.checkInTime : new Date(firstTrans.checkInTime),
             notes: checkoutModal.notes || undefined,
           })
         }
         toast.success(t('payment.success' as any))
       } catch (printError) {
         console.error('Print error:', printError)
-        // Don't fail the transaction if printing fails
         toast.error('Transaction completed but receipt printing failed. Please check your printer.')
       }
 

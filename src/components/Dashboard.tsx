@@ -6,6 +6,7 @@ import CarEntryIntake from '@/components/CarEntryIntake'
 import CashierCheckout from '@/components/CashierCheckout'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useLanguage } from '@/hooks/useLanguage'
+import { useSystemStatus } from '@/hooks/useSystemStatus'
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -16,7 +17,10 @@ import {
   X, 
   Trash2,
   UserPlus,
-  ArrowLeftRight
+  ArrowLeftRight,
+  Printer,
+  Monitor,
+  RefreshCw,
 } from 'lucide-react'
 import { listenToTodayAdjustments, addCashAdjustment, deleteCashAdjustment, getStaffList, listenToTodayAttendance, recordStaffAdvance } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
@@ -24,6 +28,7 @@ import { formatCurrency, getKLDateString } from '@/lib/utils'
 
 export default function Dashboard() {
   const { t, language } = useLanguage()
+  const { printerOnline, kioskOnline, checkPrinter, checkKiosk } = useSystemStatus()
   const [isCheckoutExpanded, setIsCheckoutExpanded] = useState(false)
   const [isCashDrawerOpen, setIsCashDrawerOpen] = useState(false)
   const [adjustments, setAdjustments] = useState<any[]>([])
@@ -60,14 +65,12 @@ export default function Dashboard() {
   useEffect(() => {
     const unsub = listenToTodayAdjustments(setAdjustments)
     
-    // Load staff names and today's attendance
     let unsubAttendance: any
     const setup = async () => {
       const list = await getStaffList()
       const map: Record<string, any> = {}
       list.forEach(s => map[s.id] = s)
       setStaffMap(map)
-      
       unsubAttendance = await listenToTodayAttendance(setAttendance)
     }
     setup()
@@ -91,7 +94,6 @@ export default function Dashboard() {
   const todayCompleted = useMemo(() => {
     const todayStr = getKLDateString()
     return completedTransactions.filter(trans => {
-      // If paidTime is null (pending server sync), assume it's today since it just moved to COMPLETED
       if (!trans.paidTime) return true 
       const paidDate = trans.paidTime instanceof Date ? trans.paidTime : new Date(trans.paidTime)
       return getKLDateString(paidDate) === todayStr
@@ -307,11 +309,63 @@ export default function Dashboard() {
     });
   };
 
+  // Helper to render status badge
+  const StatusBadge = ({ online }: { online: boolean | null }) => {
+    if (online === null) return (
+      <span className="px-2 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-400 text-[10px] font-black uppercase tracking-widest">
+        Checking
+      </span>
+    )
+    if (online) return (
+      <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-1">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse inline-block" />
+        Online
+      </span>
+    )
+    return (
+      <span className="px-2 py-0.5 rounded-full bg-red-500/10 text-red-600 text-[10px] font-black uppercase tracking-widest">
+        Offline
+      </span>
+    )
+  }
+
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-950 dark:text-white transition-colors duration-200">
-      {/* Ensure Toaster is present so toast() calls are visible */}
       <Toaster />
-      
+
+      {/* System Status Bar */}
+      <div className="bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 px-4 sm:px-6 lg:px-8 py-2.5">
+        <div className="max-w-7xl mx-auto flex items-center gap-4">
+
+          {/* Printer Status */}
+          <button
+            onClick={checkPrinter}
+            title="Click to refresh printer status"
+            className="flex items-center gap-2 group"
+          >
+            <Printer className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Printer</span>
+            <StatusBadge online={printerOnline} />
+            <RefreshCw className="w-3 h-3 text-zinc-300 dark:text-zinc-700 group-hover:text-blue-500 transition-colors" />
+          </button>
+
+          <div className="w-px h-4 bg-zinc-200 dark:bg-zinc-700" />
+
+          {/* Kiosk Status */}
+          <button
+            onClick={checkKiosk}
+            title="Click to refresh kiosk status"
+            className="flex items-center gap-2 group"
+          >
+            <Monitor className="w-3.5 h-3.5 text-zinc-400" />
+            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Kiosk</span>
+            <StatusBadge online={kioskOnline} />
+            <RefreshCw className="w-3 h-3 text-zinc-300 dark:text-zinc-700 group-hover:text-blue-500 transition-colors" />
+          </button>
+
+        </div>
+      </div>
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32 lg:pb-8">
         {/* Two-Phase Layout */}
@@ -323,7 +377,7 @@ export default function Dashboard() {
 
           {/* Phase 2: Cashier Checkout (Center/Right Columns) */}
           <div className="lg:col-span-2">
-            {/* Mobile Toggle for Checkout - Collapsed by Default for better Focus on Intake */}
+            {/* Mobile Toggle for Checkout */}
             <div className="lg:hidden mb-4">
               <button
                 onClick={() => setIsCheckoutExpanded(!isCheckoutExpanded)}
@@ -350,6 +404,7 @@ export default function Dashboard() {
               <CashierCheckout
                 pendingTransactions={pendingTransactions}
                 loading={pendingLoading}
+                printerOnline={printerOnline ?? false}
               />
             </div>
           </div>
@@ -462,7 +517,6 @@ export default function Dashboard() {
                   50: 'from-cyan-500/20 to-cyan-600/5 text-cyan-600',
                   100: 'from-purple-500/20 to-purple-600/5 text-purple-600',
                 }
-                
                 return (
                   <div 
                     key={bill}
@@ -528,6 +582,7 @@ export default function Dashboard() {
           </div>
         </div>
       </main>
+
       {/* Adjustment Modal */}
       {showAdjModal && (
         <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
