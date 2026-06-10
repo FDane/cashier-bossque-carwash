@@ -32,14 +32,13 @@ export const usePrinter = (options: UsePrinterOptions = {}) => {
           }
 
           const result = await response.json()
-          console.log('Print successful:', result)
           setLastPrintedAt(new Date())
           setIsPrinting(false)
           return result
 
         } catch (error) {
           lastError = error instanceof Error ? error : new Error(String(error))
-          console.error(`Print attempt ${attempt + 1} failed:`, lastError.message)
+          // console.error(`Print attempt ${attempt + 1} failed:`, lastError.message) // Removed to fix lint warning
 
           if (attempt < (options.retryCount || 1) - 1) {
             // Wait before retrying
@@ -60,8 +59,7 @@ export const usePrinter = (options: UsePrinterOptions = {}) => {
       const response = await fetch('/api/print', { method: 'GET' })
       const data = await response.json()
       return data
-    } catch (error) {
-      console.error('Error checking printer status:', error)
+    } catch {
       return null
     }
   }, [])

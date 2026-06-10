@@ -151,9 +151,9 @@ export const executePrintJob = async (data: PrintReceiptData): Promise<void> => 
 
     try {
         await printer.execute()
-        console.log('Resit berjaya diprint')
-    } catch (error) {
-        console.error('Ralat semasa print:', error)
-        throw error
+        // console.log('Resit berjaya diprint') // Removed to fix lint warning
+    } catch (_error) {
+        // console.error('Ralat semasa print:', error) // Removed to fix lint warning
+        throw _error
     }
 }

@@ -18,7 +18,7 @@ export function useSystemStatus() {
 
   const checkKiosk = async () => {
     try {
-      const res = await fetch('https://kiosk.carwash.bossque.my/', {
+      const res = await fetch('/api/kiosk-health', {
         method: 'GET',
         signal: AbortSignal.timeout(3000),
       })

@@ -166,7 +166,7 @@ export default function PastCarSearch() {
     } else {
       toast.error(t('pastCars.printFailed' as any) || 'Print failed. Is the printer server running?')
     }
-  } catch (err) {
+  } catch {
     toast.error(t('pastCars.printError' as any) || 'Cannot connect to printer server.')
   }
 }
