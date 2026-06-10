@@ -20,13 +20,11 @@ export const usePrinter = (options: UsePrinterOptions = {}) => {
 
       for (let attempt = 0; attempt < (options.retryCount || 1); attempt++) {
         try {
-          const response = await fetch('/api/print', {
+          const response = await fetch('https://printer.carwash.bossque.my/print', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(receiptData),
-          })
+          });
 
           if (!response.ok) {
             const errorData = await response.json()
