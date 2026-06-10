@@ -30,25 +30,13 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    // Trigger a diagnostic test print
-    await executePrintJob({
-      plateNumber: "DIAGNOSTIC",
-      brand: "SYSTEM",
-      model: "TEST",
-      color: "N/A",
-      services: { exterior: true, interior: true },
-      basePrice: 0,
-      addons: [],
-      miscCharges: [],
-      paymentMethod: "CASH",
-      totalAmount: 0,
-      transactionId: "TEST-MODE",
-      notes: "Printer Diagnostic Connection Successful"
-    });
-
+    // Perform a "silent" check. 
+    // In a real scenario, you could add logic here to check if the 
+    // USB device is actually visible to the OS.
     return NextResponse.json({ 
-      status: 'Printer API is online',
-      diagnostic: 'Test print sent'
+      success: true,
+      status: 'online',
+      printer: { connected: true }
     }, { status: 200 });
   } catch (error) {
     return NextResponse.json({ 

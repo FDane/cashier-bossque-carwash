@@ -20,7 +20,7 @@ export const usePrinter = (options: UsePrinterOptions = {}) => {
 
       for (let attempt = 0; attempt < (options.retryCount || 1); attempt++) {
         try {
-          const response = await fetch('https://printer.bossque.my/print', {
+          const response = await fetch('https://printer.bossque.my/api/print', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(receiptData),
@@ -56,7 +56,7 @@ export const usePrinter = (options: UsePrinterOptions = {}) => {
 
   const checkPrinterStatus = useCallback(async () => {
     try {
-      const response = await fetch('/api/print', { method: 'GET' })
+      const response = await fetch('https://printer.bossque.my/api/print', { method: 'GET' })
       const data = await response.json()
       return data
     } catch {

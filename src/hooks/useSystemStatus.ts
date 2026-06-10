@@ -4,17 +4,22 @@ export function useSystemStatus() {
   const [printerOnline, setPrinterOnline] = useState<boolean | null>(null)
   const [kioskOnline, setKioskOnline] = useState<boolean | null>(null)
 
-  const checkPrinter = async () => {
-    try {
-      const res = await fetch('https://printer.bossque.my/', {
-        method: 'GET',
-        signal: AbortSignal.timeout(3000),
-      })
-      setPrinterOnline(res.ok)
-    } catch {
-      setPrinterOnline(false)
-    }
+const checkPrinter = async () => {
+  try {
+    const res = await fetch('https://printer.bossque.my/api/print', {
+      method: 'GET',
+      signal: AbortSignal.timeout(3000),
+    });
+
+    const data = await res.json();
+    const online = res.ok && data.printer?.connected === true;
+
+    setPrinterOnline(online);
+  } catch (error) {
+    console.error('Printer health check failed:', error);
+    setPrinterOnline(false);
   }
+}
 
   const checkKiosk = async () => {
     try {
