@@ -6,7 +6,7 @@ export function useSystemStatus() {
 
 const checkPrinter = async () => {
   try {
-    const res = await fetch('https://printer.bossque.my/api/print', {
+    const res = await fetch('https://printer.bossque.my/status', {
       method: 'GET',
       signal: AbortSignal.timeout(3000),
     });
