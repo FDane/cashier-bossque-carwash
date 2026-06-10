@@ -19,7 +19,7 @@ A complete, production-ready **Next.js carwash management dashboard** with a two
 - One-click queue entry via "Masuk Queue" button
 - Direct Firestore integration: Creates `/transactions` document with `status: 'PENDING'`
 
-#### **Phase 2: Cashier Counter Checkout** (`CashierCheckout.tsx`)
+### 2. Phase 2: Cashier Counter Checkout (`CashierCheckout.tsx`)
 - Real-time PENDING transaction queue display
 - Sticky search bar with fuzzy filtering by plate number
 - Click-to-pay modal/drawer interface
@@ -30,8 +30,18 @@ A complete, production-ready **Next.js carwash management dashboard** with a two
   - Transaction status update to 'COMPLETED'
   - Payment method & balance recording
   - Daily stats increment (revenue + car level)
+  - **Automatic Receipt Print Job** via `api/print`
 
-### Real-Time State Management
+### 3. Phase 3: Customer Kiosk Display (`KioskDisplay.tsx`)
+- **State Sync**: Listens to the `settings/kiosk_state` document.
+- **Visual Feedback**: Shows the customer exactly what the cashier is doing (addons, pricing, payment method).
+- **Stage Management**: 
+  - `idle`: Displays a premium welcome screen with time/date.
+  - `selecting`/`addons`: Itemized live-ticker of charges.
+  - `payment`: Dynamic QR code or Cash instruction.
+  - `confirmed`: Full-screen "Thank You" with a countdown timer.
+
+## 🛠️ Tech Stack & Services
 
 - **Firebase Firestore Listeners**: Real-time bidirectional sync
 - **Custom Hooks**: 
@@ -40,6 +50,7 @@ A complete, production-ready **Next.js carwash management dashboard** with a two
   - `useLanguage()` - Manages EN/MS language toggle
 - **Optimistic UI**: Transactions vanish from pending queue immediately after checkout
 - **Zero Polling**: Pure event-driven architecture
+- **ESC/POS Service**: Backend API for USB/Serial communication with thermal printers.
 
 ### Dual-Language Internationalization (i18n)
 

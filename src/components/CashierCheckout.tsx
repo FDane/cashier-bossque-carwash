@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
+import { usePrinter } from '@/hooks/usePrinter'
 import { 
   completeTransaction, 
   updateDailyStats, 
@@ -33,7 +34,7 @@ import {
   updateInventoryQuantity,
   getCustomerByPlate,
 } from '@/lib/firebaseService'
-import { showToast } from '@/lib/toast'
+import { toast } from 'react-hot-toast'
 import { formatCurrency, formatTime } from '@/lib/utils'
 import { pushKioskState } from '@/lib/kioskBridge'
 import { resizeImage } from '@/lib/imageUtils' // Import image utility
@@ -91,6 +92,7 @@ export default function CashierCheckout({
   loading: transactionsLoading,
 }: CashierCheckoutProps) {
   const { t, language } = useLanguage()
+  const { printReceipt, isPrinting } = usePrinter({ autoRetry: true, retryCount: 2 })
   const [searchQuery, setSearchQuery] = useState('')
   const [priceBook, setPriceBook] = useState<any[]>([])
   const [retailItems, setRetailItems] = useState<any[]>([])
@@ -347,10 +349,10 @@ export default function CashierCheckout({
             : prev
         )
         setCheckoutImagePreviewUrl(URL.createObjectURL(compressedImageFile))
-        showToast.success(t('payment.imageUploadSuccess' as any) || 'Image uploaded successfully')
+        toast.success(t('payment.imageUploadSuccess' as any) || 'Image uploaded successfully')
       } catch (error) {
         console.error('Error uploading checkout image:', error)
-        showToast.error(t('payment.imageUploadError' as any) || 'Failed to upload image')
+        toast.error(t('payment.imageUploadError' as any) || 'Failed to upload image')
       } finally {
         setProcessingId(null)
         if (checkoutImageInputRef.current) checkoutImageInputRef.current.value = ''
@@ -378,10 +380,10 @@ export default function CashierCheckout({
           imageUrl,
           imagePath
         })
-        showToast.success(t('payment.imageUploadSuccess' as any) || 'Image uploaded successfully')
+        toast.success(t('payment.imageUploadSuccess' as any) || 'Image uploaded successfully')
       } catch (error) {
         console.error('Error uploading edit image:', error)
-        showToast.error(t('payment.imageUploadError' as any) || 'Failed to upload image')
+        toast.error(t('payment.imageUploadError' as any) || 'Failed to upload image')
       } finally {
         setProcessingId(null)
         if (editImageInputRef.current) editImageInputRef.current.value = ''
@@ -397,9 +399,9 @@ export default function CashierCheckout({
     if (window.confirm(t('cashier.confirmDelete' as any) || 'Are you sure you want to remove this car?')) {
       try {
         await deleteTransaction(id, imagePath ?? undefined)
-        showToast.success(t('cashier.deleteSuccess' as any) || 'Car removed from queue')
+        toast.success(t('cashier.deleteSuccess' as any) || 'Car removed from queue')
       } catch {
-        showToast.error(t('common.error' as any) || 'Error removing car')
+        toast.error(t('common.error' as any) || 'Error removing car')
       }
     }
   }
@@ -439,16 +441,16 @@ export default function CashierCheckout({
     if (!editingTransaction) return
     try {
       await updateTransaction(editingTransaction.id, editingTransaction)
-      showToast.success(t('cashier.updateSuccess' as any) || 'Car updated successfully')
+      toast.success(t('cashier.updateSuccess' as any) || 'Car updated successfully')
       setEditingTransaction(null)
     } catch {
-      showToast.error(t('common.error' as any) || 'Error updating car')
+      toast.error(t('common.error' as any) || 'Error updating car')
     }
   }
 
   const handleCheckout = async () => {
     if (checkoutModal.transactions.length === 0 || !checkoutModal.paymentMethod) {
-      showToast.warning(t('payment.error.invalidCash' as any))
+      toast.error(t('payment.error.invalidCash' as any))
       return
     }
 
@@ -457,7 +459,7 @@ export default function CashierCheckout({
       checkoutModal.paymentMethod === 'CASH' &&
       checkoutModal.cashReceived < totalWithAddons
     ) {
-      showToast.error(t('payment.error.invalidCash' as any))
+      toast.error(t('payment.error.invalidCash' as any))
       return
     }
 
@@ -510,7 +512,43 @@ export default function CashierCheckout({
         checkoutModal.changeDenominations
       )
 
-      showToast.success(t('payment.success' as any))
+      // Print receipt for each transaction
+      try {
+        for (let i = 0; i < checkoutModal.transactions.length; i++) {
+          const trans = checkoutModal.transactions[i]
+          const customer = transactionCustomers[trans.plateNumber]
+          const itemAddons = i === 0 ? checkoutModal.selectedAddons : []
+          const itemMiscCharges = i === 0 ? checkoutModal.miscCharges : []
+          const itemTotal = trans.computedPrice + itemAddons.reduce((s, a) => s + (a.price * a.quantity), 0) + itemMiscCharges.reduce((s, m) => s + m.price, 0)
+
+          await printReceipt({
+            transactionId: trans.id,
+            plateNumber: trans.plateNumber,
+            customerName: customer?.name || 'N/A',
+            brand: trans.brand,
+            model: trans.model,
+            color: trans.color,
+            services: trans.services,
+            basePrice: trans.computedPrice,
+            addons: itemAddons,
+            miscCharges: itemMiscCharges,
+            paymentMethod: checkoutModal.paymentMethod,
+            cashReceived: i === 0 ? checkoutModal.cashReceived : undefined,
+            change: i === 0 ? (checkoutModal.paymentMethod === 'CASH' ? balance : 0) : undefined,
+            cashDenominations: i === 0 ? checkoutModal.cashDenominations : undefined,
+            changeDenominations: i === 0 ? checkoutModal.changeDenominations : undefined,
+            totalAmount: itemTotal,
+            timestamp: trans.checkInTime instanceof Date ? trans.checkInTime : new Date(trans.checkInTime),
+            notes: checkoutModal.notes || undefined,
+          })
+        }
+        toast.success(t('payment.success' as any))
+      } catch (printError) {
+        console.error('Print error:', printError)
+        // Don't fail the transaction if printing fails
+        toast.error('Transaction completed but receipt printing failed. Please check your printer.')
+      }
+
       setSelectedIds([])
 
       // Close modal and reset state
@@ -526,7 +564,7 @@ export default function CashierCheckout({
       })
     } catch (error) {
       console.error('Error processing checkout:', error)
-      showToast.error(t('payment.error' as any))
+      toast.error(t('payment.error' as any))
     } finally {
       setProcessingId(null)
     }
@@ -1214,14 +1252,15 @@ export default function CashierCheckout({
                 onClick={handleCheckout}
                 disabled={
                   processingId !== null ||
+                  isPrinting ||
                   !checkoutModal.paymentMethod ||
                   (checkoutModal.paymentMethod === 'CASH' && balance < 0) ||
                   isChangeIncomplete
                 }
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white font-bold py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-xl shadow-lg shadow-green-500/20"
               >
-                {processingId ? <Loader2 className="w-6 h-6 animate-spin" /> : null}
-                <span>{t('payment.checkout' as any)}</span>
+                {processingId || isPrinting ? <Loader2 className="w-6 h-6 animate-spin" /> : null}
+                <span>{isPrinting ? (t('payment.printing' as any) || 'Printing...') : (t('payment.checkout' as any))}</span>
               </button>
             </div>
           </div>

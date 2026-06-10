@@ -161,6 +161,7 @@ export const translations = {
     'payment.imageUploadError': 'Failed to upload image',
     'payment.success': 'Payment processed successfully',
     'payment.error': 'Error processing payment',
+    'payment.printing': 'Printing receipt, please wait...',
 
     // Staff Management
     'staff.title': 'Staff Management — Today',
@@ -391,6 +392,7 @@ export const translations = {
     'payment.imageUploadError': 'Gagal memuat naik imej',
     'payment.success': 'Pembayaran berjaya diproses',
     'payment.error': 'Ralat memproses pembayaran',
+    'payment.printing': 'Mencetak resit, sila tunggu...',
 
     // Staff Management
     'staff.title': 'Pengurusan Kakitangan — Hari Ini',

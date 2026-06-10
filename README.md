@@ -4,11 +4,11 @@ A modern, real-time carwash management system built with Next.js, TypeScript, Ta
 
 ## Features
 
-### 🚗 Two-Phase Workflow
+### 🚗 Three-Part Workflow
 
 1. **Phase 1: Car Entry Intake**
    - Quick-input panel for floor staff
-   - Plate number registration (auto-uppercase)
+   - Plate number registration with auto-uppercase
    - Car brand/model selection from dropdown
    - Color selection
    - Service type toggles (Exterior/Interior/Engine)
@@ -16,12 +16,23 @@ A modern, real-time carwash management system built with Next.js, TypeScript, Ta
    - One-click queue entry
 
 2. **Phase 2: Cashier Counter Checkout**
-   - Real-time PENDING transaction queue
-   - Fuzzy search by plate number
-   - Payment method selection (Cash/Online)
-   - Real-time balance calculation
-   - QR code display for online payments
-   - Automatic daily statistics tracking
+   - Real-time PENDING queue with fuzzy search
+   - Integrated POS-58 Thermal Printer support for automatic receipts
+   - Multi-car batch payment processing
+   - Interactive cash calculator with change calculation
+   - Automatic daily revenue and statistics tracking
+
+3. **Phase 3: Customer Kiosk Display**
+   - Real-time customer-facing status board
+   - Visual vehicle identification (Images or Silhouettes)
+   - Live itemized pricing and addon display
+   - Interactive payment status (Processing -> Confirmed)
+   - Synchronized animations with the cashier counter
+
+### 🖨️ Printer Integration
+- **ESC/POS Support**: Optimized for 58mm thermal printers.
+- **Automatic Printing**: Receipts trigger instantly upon checkout completion.
+- **Customizable**: Editable templates for business branding and receipt layout.
 
 ### 🌐 Internationalization
 
@@ -121,6 +132,15 @@ A modern, real-time carwash management system built with Next.js, TypeScript, Ta
      "totalRevenue": 1600
    }
    ```
+
+   **`/settings/kiosk_state`** - Kiosk synchronization
+   - This document is used to broadcast the current checkout state to the customer display.
+   - Fields: `stage`, `transactions`, `totalAmount`, `paymentMethod`, etc.
+
+   **`/price_book`** - Car pricing
+   ```json
+   {
+     "brand": "Toyota",
 
    **`/price_book`** - Car pricing
    ```json
