@@ -9,33 +9,72 @@ export default function PrinterTestPage() {
   const [status, setStatus] = useState<'idle' | 'printing' | 'success' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState('')
 
-  const handleTestPrint = async (type: 'simple' | 'full') => {
+  const handleTestPrint = async (type: 'simple' | 'full' | 'multi') => {
     setStatus('printing')
     setErrorMessage('')
 
     try {
-      const testData = {
-        transactionId: `TEST-${Math.floor(Math.random() * 10000)}`,
-        plateNumber: type === 'simple' ? 'TEST-PING' : 'VBA 1234',
-        brand: 'Perodua',
-        model: 'Viva',
-        color: 'Silver',
-        services: {
-          exterior: true,
-          interior: type === 'full',
-        },
-        basePrice: type === 'simple' ? 0 : 15.00,
-        addons: type === 'full' ? [{ name: 'Tyre Shine', price: 3.00, quantity: 1 }] : [],
-        miscCharges: [],
-        paymentMethod: 'CASH' as const,
-        cashReceived: 20.00,
-        change: 2.00,
-        totalAmount: type === 'simple' ? 0 : 18.00,
-        notes: type === 'simple' ? 'Hardware connection test successful.' : 'Full receipt layout test.',
+      let testData
+
+      if (type === 'multi') {
+        const cars = [
+          { plateNumber: 'VBA 1234', brand: 'Perodua', model: 'Viva', services: { exterior: true, interior: true, engine: false }, price: 24.00 },
+          { plateNumber: 'JHB 5678', brand: 'Toyota', model: 'Vios', services: { exterior: true, interior: false, engine: false }, price: 18.00 },
+          { plateNumber: 'KL 9999', brand: 'Honda', model: 'City', services: { exterior: true, interior: true, engine: true }, price: 35.00 },
+        ]
+
+        const combinedMiscCharges = cars.map(car => {
+          const svcs = []
+          if (car.services.exterior) svcs.push('Luar')
+          if (car.services.interior) svcs.push('Dalam')
+          if (car.services.engine) svcs.push('Enjin')
+          const serviceLabel = svcs.length > 0 ? `Cucian ${svcs.join(' ')}` : 'Cucian'
+          return {
+            name: `${car.plateNumber} (${car.brand} ${car.model})|${serviceLabel}`,
+            price: car.price,
+          }
+        })
+
+        testData = {
+          transactionId: `TEST-MULTI-${Math.floor(Math.random() * 10000)}`,
+          plateNumber: cars.map(c => c.plateNumber).join(', '),
+          brand: '',
+          model: '',
+          color: '',
+          services: { exterior: false, interior: false, engine: false },
+          basePrice: 0,
+          addons: [{ name: 'Wax Premium', price: 5.00, quantity: 1 }],
+          miscCharges: combinedMiscCharges,
+          paymentMethod: 'CASH' as const,
+          cashReceived: 100.00,
+          change: 18.00,
+          totalAmount: 82.00,
+          notes: 'Multi-car batch receipt test.',
+        }
+      } else {
+        testData = {
+          transactionId: `TEST-${Math.floor(Math.random() * 10000)}`,
+          plateNumber: type === 'simple' ? 'TEST-PING' : 'VBA 1234',
+          brand: 'Perodua',
+          model: 'Viva',
+          color: 'Silver',
+          services: {
+            exterior: true,
+            interior: type === 'full',
+            engine: false,
+          },
+          basePrice: type === 'simple' ? 0 : 15.00,
+          addons: type === 'full' ? [{ name: 'Tyre Shine', price: 3.00, quantity: 1 }] : [],
+          miscCharges: [],
+          paymentMethod: 'CASH' as const,
+          cashReceived: 20.00,
+          change: 2.00,
+          totalAmount: type === 'simple' ? 0 : 18.00,
+          notes: type === 'simple' ? 'Hardware connection test successful.' : 'Full receipt layout test.',
+        }
       }
 
       await printReceipt(testData)
-      
       setStatus('success')
       setTimeout(() => setStatus('idle'), 4000)
 
@@ -48,15 +87,11 @@ export default function PrinterTestPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200 p-6 flex flex-col items-center justify-center font-sans">
       
-      {/* Main Card container */}
       <div className="bg-white p-8 sm:p-10 rounded-3xl shadow-xl w-full max-w-md border border-zinc-100">
         
-        {/* Header Section with Logo */}
+        {/* Header */}
         <div className="flex flex-col items-center mb-8 text-center">
           <div className="w-24 h-24 mb-4 relative rounded-2xl overflow-hidden bg-zinc-50 border border-zinc-100 shadow-inner flex items-center justify-center">
-            {/* Note: Ensure public/logo.png exists. 
-              We use object-contain so it fits perfectly without cropping.
-            */}
             <Image 
               src="/logo.png" 
               alt="Carwash Bossque Logo" 
@@ -80,7 +115,7 @@ export default function PrinterTestPage() {
             disabled={status === 'printing'}
             className="w-full bg-white border-2 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-semibold py-3.5 px-4 rounded-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
-            <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+            <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
             Quick Connection Test
           </button>
 
@@ -89,12 +124,21 @@ export default function PrinterTestPage() {
             disabled={status === 'printing'}
             className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
           >
-            <svg className="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            <svg className="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
             Print Full Dummy Receipt
+          </button>
+
+          <button
+            onClick={() => handleTestPrint('multi')}
+            disabled={status === 'printing'}
+            className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3.5 px-4 rounded-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/30 flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            Print Multi-Car Receipt (3 Cars)
           </button>
         </div>
 
-        {/* Status Feedback Area */}
+        {/* Status Feedback */}
         <div className="mt-8 h-16 flex items-center justify-center">
           {status === 'idle' && (
             <span className="text-zinc-400 text-sm flex items-center gap-2">

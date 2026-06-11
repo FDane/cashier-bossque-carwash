@@ -23,11 +23,11 @@ import {
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
 import { usePrinter } from '@/hooks/usePrinter'
-import { 
-  completeTransaction, 
-  updateDailyStats, 
-  deleteTransaction, 
-  updateTransaction, 
+import {
+  completeTransaction,
+  updateDailyStats,
+  deleteTransaction,
+  updateTransaction,
   uploadImageToFirebase,
   listenToFullPriceBook,
   listenToRetailItems,
@@ -186,7 +186,7 @@ export default function CashierCheckout({
       })
     }
     // Sort: oldest transaction on top (ascending order of checkInTime)
-    return result.sort((a, b) => 
+    return result.sort((a, b) =>
       new Date(a.checkInTime).getTime() - new Date(b.checkInTime).getTime()
     )
   }, [pendingTransactions, searchQuery, transactionCustomers])
@@ -194,7 +194,7 @@ export default function CashierCheckout({
   // Calculate total with addons
   const totalWithAddons = useMemo(() => {
     if (checkoutModal.transactions.length === 0) return 0
-    
+
     const baseTotal = checkoutModal.transactions.reduce((sum, t) => sum + t.computedPrice, 0)
     const addonsTotal = checkoutModal.selectedAddons.reduce(
       (sum, item) => sum + item.price * item.quantity,
@@ -245,7 +245,7 @@ export default function CashierCheckout({
   }
 
   const toggleSelection = (id: string) => {
-    setSelectedIds(prev => 
+    setSelectedIds(prev =>
       prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
     )
   }
@@ -253,7 +253,7 @@ export default function CashierCheckout({
   const handleBatchCheckout = () => {
     const selected = pendingTransactions.filter(t => selectedIds.includes(t.id))
     if (selected.length === 0) return
-    
+
     setCheckoutModal({
       transactions: selected,
       paymentMethod: null,
@@ -345,9 +345,9 @@ export default function CashierCheckout({
         setCheckoutModal((prev) =>
           prev.transactions.length > 0
             ? {
-                ...prev,
-                transactions: prev.transactions.map(t => t.id === targetTrans.id ? { ...t, imageUrl, imagePath } : t)
-              }
+              ...prev,
+              transactions: prev.transactions.map(t => t.id === targetTrans.id ? { ...t, imageUrl, imagePath } : t)
+            }
             : prev
         )
         setCheckoutImagePreviewUrl(URL.createObjectURL(compressedImageFile))
@@ -468,15 +468,15 @@ export default function CashierCheckout({
     setProcessingId('BATCH_PROCESSING')
 
     try {
-    
+
       // Merge retail addons and misc charges for the database
       const retailAndMisc = [
         ...checkoutModal.selectedAddons,
-        ...checkoutModal.miscCharges.map(m => ({ 
-          id: `misc_${Date.now()}_${m.name}`, 
-          name: m.name, 
-          price: m.price, 
-          quantity: 1 
+        ...checkoutModal.miscCharges.map(m => ({
+          id: `misc_${Date.now()}_${m.name}`,
+          name: m.name,
+          price: m.price,
+          quantity: 1
         }))
       ]
 
@@ -488,7 +488,7 @@ export default function CashierCheckout({
       // Process each transaction
       for (let i = 0; i < checkoutModal.transactions.length; i++) {
         const trans = checkoutModal.transactions[i];
-        
+
         // We attribute the retail/misc extras only to the FIRST car in the batch
         // so the total money across all individual records matches the cash drawer.
         const itemAddons = i === 0 ? retailAndMisc : [];
@@ -516,64 +516,71 @@ export default function CashierCheckout({
 
       // Print ONE combined receipt for all transactions (only if printer is online)
       if (printerOnline)
-      try {
-        if (checkoutModal.transactions.length === 1) {
-          // Single car — print normally
-          const trans = checkoutModal.transactions[0]
-          await printReceipt({
-            transactionId: trans.id,
-            plateNumber: trans.plateNumber,
-            brand: trans.brand,
-            model: trans.model,
-            color: trans.color,
-            services: trans.services,
-            basePrice: trans.computedPrice,
-            addons: checkoutModal.selectedAddons,
-            miscCharges: checkoutModal.miscCharges,
-            paymentMethod: checkoutModal.paymentMethod,
-            cashReceived: checkoutModal.cashReceived,
-            change: checkoutModal.paymentMethod === 'CASH' ? balance : 0,
-            cashDenominations: checkoutModal.cashDenominations,
-            changeDenominations: checkoutModal.changeDenominations,
-            totalAmount: totalWithAddons,
-            timestamp: trans.checkInTime instanceof Date ? trans.checkInTime : new Date(trans.checkInTime),
-            notes: checkoutModal.notes || undefined,
-          })
-        } else {
-          // Multiple cars — print ONE combined receipt
-          const firstTrans = checkoutModal.transactions[0]
-          const combinedMiscCharges = [
-            ...checkoutModal.transactions.map(trans => ({
-              name: `${trans.plateNumber} (${trans.brand} ${trans.model})`,
-              price: trans.computedPrice,
-            })),
-            ...checkoutModal.miscCharges,
-          ]
-          await printReceipt({
-            transactionId: firstTrans.id,
-            plateNumber: checkoutModal.transactions.map(t => t.plateNumber).join(', '),
-            brand: '',
-            model: '',
-            color: '',
-            services: { exterior: false, interior: false, engine: false },
-            basePrice: 0,
-            addons: checkoutModal.selectedAddons,
-            miscCharges: combinedMiscCharges,
-            paymentMethod: checkoutModal.paymentMethod,
-            cashReceived: checkoutModal.cashReceived,
-            change: checkoutModal.paymentMethod === 'CASH' ? balance : 0,
-            cashDenominations: checkoutModal.cashDenominations,
-            changeDenominations: checkoutModal.changeDenominations,
-            totalAmount: totalWithAddons,
-            timestamp: firstTrans.checkInTime instanceof Date ? firstTrans.checkInTime : new Date(firstTrans.checkInTime),
-            notes: checkoutModal.notes || undefined,
-          })
+        try {
+          if (checkoutModal.transactions.length === 1) {
+            // Single car — print normally
+            const trans = checkoutModal.transactions[0]
+            await printReceipt({
+              transactionId: trans.id,
+              plateNumber: trans.plateNumber,
+              brand: trans.brand,
+              model: trans.model,
+              color: trans.color,
+              services: trans.services,
+              basePrice: trans.computedPrice,
+              addons: checkoutModal.selectedAddons,
+              miscCharges: checkoutModal.miscCharges,
+              paymentMethod: checkoutModal.paymentMethod,
+              cashReceived: checkoutModal.cashReceived,
+              change: checkoutModal.paymentMethod === 'CASH' ? balance : 0,
+              cashDenominations: checkoutModal.cashDenominations,
+              changeDenominations: checkoutModal.changeDenominations,
+              totalAmount: totalWithAddons,
+              timestamp: trans.checkInTime instanceof Date ? trans.checkInTime : new Date(trans.checkInTime),
+              notes: checkoutModal.notes || undefined,
+            })
+          } else {
+            // Multiple cars — print ONE combined receipt
+            const firstTrans = checkoutModal.transactions[0]
+            const combinedMiscCharges = [
+              ...checkoutModal.transactions.map(trans => {
+                const svcs = []
+                if (trans.services?.exterior) svcs.push('Luar')
+                if (trans.services?.interior) svcs.push('Dalam')
+                if (trans.services?.engine) svcs.push('Enjin')
+                const serviceLabel = svcs.length > 0 ? `Cucian ${svcs.join(' ')}` : 'Cucian'
+                return {
+                  name: `${trans.plateNumber} (${trans.brand} ${trans.model})|${serviceLabel}`,
+                  price: trans.computedPrice,
+                }
+              }),
+              ...checkoutModal.miscCharges,
+            ]
+            await printReceipt({
+              transactionId: firstTrans.id,
+              plateNumber: checkoutModal.transactions.map(t => t.plateNumber).join(', '),
+              brand: '',
+              model: '',
+              color: '',
+              services: { exterior: false, interior: false, engine: false },
+              basePrice: 0,
+              addons: checkoutModal.selectedAddons,
+              miscCharges: combinedMiscCharges,
+              paymentMethod: checkoutModal.paymentMethod,
+              cashReceived: checkoutModal.cashReceived,
+              change: checkoutModal.paymentMethod === 'CASH' ? balance : 0,
+              cashDenominations: checkoutModal.cashDenominations,
+              changeDenominations: checkoutModal.changeDenominations,
+              totalAmount: totalWithAddons,
+              timestamp: firstTrans.checkInTime instanceof Date ? firstTrans.checkInTime : new Date(firstTrans.checkInTime),
+              notes: checkoutModal.notes || undefined,
+            })
+          }
+          toast.success(t('payment.success' as any))
+        } catch (printError) {
+          console.error('Print error:', printError)
+          toast.error('Transaction completed but receipt printing failed. Please check your printer.')
         }
-        toast.success(t('payment.success' as any))
-      } catch (printError) {
-        console.error('Print error:', printError)
-        toast.error('Transaction completed but receipt printing failed. Please check your printer.')
-      }
 
       setSelectedIds([])
 
@@ -636,8 +643,8 @@ export default function CashierCheckout({
     }
     pushKioskState({
       stage: checkoutModal.paymentMethod ? 'payment'
-           : checkoutModal.selectedAddons.length ? 'addons'
-           : 'selecting',
+        : checkoutModal.selectedAddons.length ? 'addons'
+          : 'selecting',
       transactions: checkoutModal.transactions.map(t => ({
         id: t.id,
         plateNumber: t.plateNumber,
@@ -647,16 +654,16 @@ export default function CashierCheckout({
         services: t.services,
         computedPrice: t.computedPrice,
         imageUrl: t.imageUrl,
-      checkInTime: t.checkInTime instanceof Date ? t.checkInTime : new Date(t.checkInTime).toISOString()
-    })),
-    paymentMethod: checkoutModal.paymentMethod,
-    cashReceived: checkoutModal.cashReceived,
-    selectedAddons: checkoutModal.selectedAddons,
-    miscCharges: checkoutModal.miscCharges,
-    totalAmount: totalWithAddons,
-    balance,
-  })
-}, [checkoutModal, totalWithAddons, balance])
+        checkInTime: t.checkInTime instanceof Date ? t.checkInTime : new Date(t.checkInTime).toISOString()
+      })),
+      paymentMethod: checkoutModal.paymentMethod,
+      cashReceived: checkoutModal.cashReceived,
+      selectedAddons: checkoutModal.selectedAddons,
+      miscCharges: checkoutModal.miscCharges,
+      totalAmount: totalWithAddons,
+      balance,
+    })
+  }, [checkoutModal, totalWithAddons, balance])
 
   return (
     <div className="space-y-6 sm:space-y-8">
@@ -677,7 +684,7 @@ export default function CashierCheckout({
               </span>
             </div>
           </div>
-          
+
           <div className="p-5 sm:p-8 bg-zinc-50/50 dark:bg-zinc-800/20">
             <div className="relative group">
               <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-6 h-6 text-zinc-400 group-focus-within:text-blue-500 transition-colors" />
@@ -740,123 +747,122 @@ export default function CashierCheckout({
           {filteredTransactions.map((transaction) => {
             const isSelected = selectedIds.includes(transaction.id)
             return (
-            <div
-              key={transaction.id}
-              className={`relative text-left group bg-white dark:bg-zinc-900 border-2 rounded-2xl p-5 sm:p-7 transition-all duration-300 hover:shadow-xl transform hover:-translate-y-1 ${
-                isSelected 
-                  ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-900/10 shadow-lg shadow-blue-500/5' 
-                  : 'border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50'
-              }`}
-            >
-              <div className="mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <div className="flex items-center gap-3">
-                    <input 
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        toggleSelection(transaction.id);
-                      }}
-                      className="w-5 h-5 rounded-md border-2 border-zinc-300 dark:border-zinc-700 accent-blue-600 cursor-pointer transition-all"
-                    />
-                    <div className="text-zinc-500 text-xs uppercase font-semibold">
-                      {t('payment.plateNumber' as any)}
+              <div
+                key={transaction.id}
+                className={`relative text-left group bg-white dark:bg-zinc-900 border-2 rounded-2xl p-5 sm:p-7 transition-all duration-300 hover:shadow-xl transform hover:-translate-y-1 ${isSelected
+                    ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-900/10 shadow-lg shadow-blue-500/5'
+                    : 'border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50'
+                  }`}
+              >
+                <div className="mb-4">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => {
+                          e.stopPropagation();
+                          toggleSelection(transaction.id);
+                        }}
+                        className="w-5 h-5 rounded-md border-2 border-zinc-300 dark:border-zinc-700 accent-blue-600 cursor-pointer transition-all"
+                      />
+                      <div className="text-zinc-500 text-xs uppercase font-semibold">
+                        {t('payment.plateNumber' as any)}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleEditClick(transaction)}
+                        className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                        title="Edit car"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(transaction.id, transaction.imagePath)}
+                        className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
+                        title="Remove car"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                      {transaction.imageUrl && (
+                        <button
+                          onClick={() => setViewingImageUrl(transaction.imageUrl || null)}
+                          className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
+                          title="View car photo"
+                        >
+                          <ImageIcon className="w-4 h-4" />
+                        </button>
+                      )}
+                      <ChevronRight className="w-5 h-5 text-zinc-600" />
                     </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button 
-                      onClick={() => handleEditClick(transaction)}
-                      className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                      title="Edit car"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                    <button 
-                      onClick={() => handleDelete(transaction.id, transaction.imagePath)}
-                      className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                      title="Remove car"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                    {transaction.imageUrl && (
-                      <button
-                        onClick={() => setViewingImageUrl(transaction.imageUrl || null)}
-                        className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                        title="View car photo"
-                      >
-                        <ImageIcon className="w-4 h-4" />
-                      </button>
+
+                  <div
+                    className="cursor-pointer"
+                    onClick={() => handleCardClick(transaction)}
+                  >
+                    <div className="text-zinc-900 dark:text-white text-2xl sm:text-3xl font-bold font-mono tracking-wider">
+                      {transaction.plateNumber}
+                    </div>
+                    {transactionCustomers[transaction.plateNumber] && (
+                      <div className="flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+                        <User className="w-3.5 h-3.5" /> {transactionCustomers[transaction.plateNumber].name}
+                      </div>
                     )}
-                    <ChevronRight className="w-5 h-5 text-zinc-600" />
                   </div>
                 </div>
 
-                <div 
+                <div
                   className="cursor-pointer"
                   onClick={() => handleCardClick(transaction)}
                 >
-                  <div className="text-zinc-900 dark:text-white text-2xl sm:text-3xl font-bold font-mono tracking-wider">
-                    {transaction.plateNumber}
+                  <div className="space-y-2 mb-4">
+                    <div className="flex justify-between text-base">
+                      <span className="text-zinc-600 dark:text-zinc-400 font-medium">
+                        {transaction.brand} {transaction.model}
+                      </span>
+                      <span className="text-zinc-500 text-xs">{t(`color.${transaction.color}` as any)}</span>
+                    </div>
+
+                    {/* Service Tags */}
+                    <div className="flex gap-2 flex-wrap mt-3">
+                      {transaction.services.exterior && (
+                        <span className="px-3 py-1 bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 text-xs rounded-full font-bold">
+                          {SERVICE_CATEGORIES.exterior[language as 'en' | 'ms']}
+                        </span>
+                      )}
+                      {transaction.services.interior && (
+                        <span className="px-3 py-1 bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-300 text-xs rounded-full font-bold">
+                          {SERVICE_CATEGORIES.interior[language as 'en' | 'ms']}
+                        </span>
+                      )}
+                      {transaction.services.engine && (
+                        <span className="px-3 py-1 bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 text-xs rounded-full font-bold">
+                          {SERVICE_CATEGORIES.engine[language as 'en' | 'ms']}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  {transactionCustomers[transaction.plateNumber] && (
-                    <div className="flex items-center gap-1 text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                      <User className="w-3.5 h-3.5" /> {transactionCustomers[transaction.plateNumber].name}
+
+                  {/* Display Notes if any */}
+                  {(transaction as any).notes && (
+                    <div className="mb-4 p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl text-xs text-amber-600 dark:text-amber-400 italic">
+                      &quot;{(transaction as any).notes}&quot;
                     </div>
                   )}
-                </div>
-              </div>
 
-              <div 
-                className="cursor-pointer"
-                onClick={() => handleCardClick(transaction)}
-              >
-                <div className="space-y-2 mb-4">
-                  <div className="flex justify-between text-base">
-                    <span className="text-zinc-600 dark:text-zinc-400 font-medium">
-                      {transaction.brand} {transaction.model}
-                    </span>
-                    <span className="text-zinc-500 text-xs">{t(`color.${transaction.color}` as any)}</span>
-                  </div>
-
-                  {/* Service Tags */}
-                  <div className="flex gap-2 flex-wrap mt-3">
-                    {transaction.services.exterior && (
-                      <span className="px-3 py-1 bg-blue-500/10 dark:bg-blue-500/20 text-blue-600 dark:text-blue-300 text-xs rounded-full font-bold">
-                        {SERVICE_CATEGORIES.exterior[language as 'en' | 'ms']}
-                      </span>
-                    )}
-                    {transaction.services.interior && (
-                      <span className="px-3 py-1 bg-green-500/10 dark:bg-green-500/20 text-green-600 dark:text-green-300 text-xs rounded-full font-bold">
-                        {SERVICE_CATEGORIES.interior[language as 'en' | 'ms']}
-                      </span>
-                    )}
-                    {transaction.services.engine && (
-                      <span className="px-3 py-1 bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 text-xs rounded-full font-bold">
-                        {SERVICE_CATEGORIES.engine[language as 'en' | 'ms']}
-                      </span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Display Notes if any */}
-                {(transaction as any).notes && (
-                  <div className="mb-4 p-3 bg-amber-500/5 border border-amber-500/10 rounded-xl text-xs text-amber-600 dark:text-amber-400 italic">
-                    &quot;{(transaction as any).notes}&quot;
-                  </div>
-                )}
-
-                {/* Time & Price */}
-                <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 flex justify-between items-end">
-                  <div className="text-xs text-zinc-500 font-medium">
-                    {formatTime(transaction.checkInTime)}
-                  </div>
-                  <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">
-                    {formatCurrency(transaction.computedPrice)}
+                  {/* Time & Price */}
+                  <div className="border-t border-zinc-100 dark:border-zinc-800 pt-3 flex justify-between items-end">
+                    <div className="text-xs text-zinc-500 font-medium">
+                      {formatTime(transaction.checkInTime)}
+                    </div>
+                    <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">
+                      {formatCurrency(transaction.computedPrice)}
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
             )
           })}
         </div>
@@ -901,7 +907,7 @@ export default function CashierCheckout({
                     {checkoutModal.transactions.length === 1 && (
                       transactionCustomers[checkoutModal.transactions[0].plateNumber] ? (
                         <div className="text-sm font-bold text-blue-600">{transactionCustomers[checkoutModal.transactions[0].plateNumber].name}</div>
-                      ) : ( 
+                      ) : (
                         <button
                           onClick={() => router.push('/customers')}
                           className="text-xs font-bold text-zinc-400 hover:text-blue-500 flex items-center gap-1"
@@ -915,48 +921,48 @@ export default function CashierCheckout({
 
                   {/* Image capture only available for single vehicle checkout in batch */}
                   {checkoutModal.transactions.length === 1 && (
-                  <div className="mt-4 rounded-3xl border border-zinc-200 dark:border-zinc-700 p-4 bg-zinc-50 dark:bg-zinc-900/50">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
-                          {t('payment.vehiclePhoto' as any) || 'Vehicle Photo (optional)'}
+                    <div className="mt-4 rounded-3xl border border-zinc-200 dark:border-zinc-700 p-4 bg-zinc-50 dark:bg-zinc-900/50">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
+                            {t('payment.vehiclePhoto' as any) || 'Vehicle Photo (optional)'}
+                          </div>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {t('payment.vehiclePhotoNote' as any) || 'Upload or update the vehicle photo if available.'}
+                          </p>
                         </div>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                          {t('payment.vehiclePhotoNote' as any) || 'Upload or update the vehicle photo if available.'}
-                        </p>
+                        <button
+                          type="button"
+                          onClick={triggerCheckoutImageCapture}
+                          className="inline-flex items-center gap-2 rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition"
+                        >
+                          <Camera className="w-4 h-4" />
+                          {checkoutModal.transactions[0].imageUrl ? (t('payment.changePhoto' as any) || 'Change Photo') : (t('payment.uploadPhoto' as any) || 'Upload Photo')}
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={triggerCheckoutImageCapture}
-                        className="inline-flex items-center gap-2 rounded-full border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-4 py-2 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition"
-                      >
-                        <Camera className="w-4 h-4" />
-                        {checkoutModal.transactions[0].imageUrl ? (t('payment.changePhoto' as any) || 'Change Photo') : (t('payment.uploadPhoto' as any) || 'Upload Photo')}
-                      </button>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        ref={checkoutImageInputRef}
+                        onChange={handleCheckoutImageCapture}
+                        className="hidden"
+                      />
+                      {checkoutModal.transactions[0].imageUrl && (
+                        <button
+                          type="button"
+                          onClick={() => setViewingImageUrl(checkoutModal.transactions[0].imageUrl || null)}
+                          className="mt-3 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          {t('payment.viewUploadedPhoto' as any) || 'View uploaded photo'}
+                        </button>
+                      )}
+                      {checkoutImagePreviewUrl && !checkoutModal.transactions[0].imageUrl && (
+                        <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
+                          {t('payment.photoSelectedNote' as any) || 'A new photo is ready to upload.'}
+                        </p>
+                      )}
                     </div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      ref={checkoutImageInputRef}
-                      onChange={handleCheckoutImageCapture}
-                      className="hidden"
-                    />
-                    {checkoutModal.transactions[0].imageUrl && (
-                      <button
-                        type="button"
-                        onClick={() => setViewingImageUrl(checkoutModal.transactions[0].imageUrl || null)}
-                        className="mt-3 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        {t('payment.viewUploadedPhoto' as any) || 'View uploaded photo'}
-                      </button>
-                    )}
-                    {checkoutImagePreviewUrl && !checkoutModal.transactions[0].imageUrl && (
-                      <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                        {t('payment.photoSelectedNote' as any) || 'A new photo is ready to upload.'}
-                      </p>
-                    )}
-                  </div>
                   )}
 
                   <div className="border-t border-zinc-700 pt-3">
@@ -979,7 +985,7 @@ export default function CashierCheckout({
                   className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-zinc-900 dark:text-white"
                   rows={2}
                   value={checkoutModal.notes}
-                  onChange={(e) => setCheckoutModal({...checkoutModal, notes: e.target.value})}
+                  onChange={(e) => setCheckoutModal({ ...checkoutModal, notes: e.target.value })}
                   placeholder={t('common.notesPlaceholder' as any) || 'Add notes for this transaction...'}
                 />
               </div>
@@ -992,7 +998,7 @@ export default function CashierCheckout({
                   </label>
                   <ShoppingBag className="w-4 h-4 text-zinc-500" />
                 </div>
-                
+
                 {/* Available Items */}
                 <div className="flex flex-wrap gap-2">
                   {retailItems.map((item) => (
@@ -1043,21 +1049,21 @@ export default function CashierCheckout({
                   {t('cashier.miscCharges' as any)}
                 </label>
                 <div className="flex gap-2">
-                  <input 
+                  <input
                     type="text"
                     placeholder={t('stats.reason' as any)}
                     value={miscForm.name}
-                    onChange={e => setMiscForm({...miscForm, name: e.target.value})}
+                    onChange={e => setMiscForm({ ...miscForm, name: e.target.value })}
                     className="flex-1 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-white"
                   />
-                  <input 
+                  <input
                     type="number"
                     placeholder={t('inventory.price' as any)}
                     value={miscForm.price}
-                    onChange={e => setMiscForm({...miscForm, price: e.target.value})}
+                    onChange={e => setMiscForm({ ...miscForm, price: e.target.value })}
                     className="w-24 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-2 text-sm text-white"
                   />
-                  <button 
+                  <button
                     onClick={handleAddMiscCharge}
                     className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors"
                   >
@@ -1096,11 +1102,10 @@ export default function CashierCheckout({
                   <button
                     type="button"
                     onClick={() => handlePaymentMethodSelect('CASH')}
-                    className={`p-4 rounded-lg border-2 font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-                      checkoutModal.paymentMethod === 'CASH'
+                    className={`p-4 rounded-lg border-2 font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${checkoutModal.paymentMethod === 'CASH'
                         ? 'bg-blue-600 border-blue-500 text-white'
                         : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-blue-500'
-                    }`}
+                      }`}
                   >
                     <Wallet className="w-5 h-5" />
                     {t('payment.cash' as any)}
@@ -1110,11 +1115,10 @@ export default function CashierCheckout({
                   <button
                     type="button"
                     onClick={() => handlePaymentMethodSelect('ONLINE')}
-                    className={`p-4 rounded-lg border-2 font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-                      checkoutModal.paymentMethod === 'ONLINE'
+                    className={`p-4 rounded-lg border-2 font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${checkoutModal.paymentMethod === 'ONLINE'
                         ? 'bg-green-600 border-green-500 text-white'
                         : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-green-500'
-                    }`}
+                      }`}
                   >
                     <CreditCard className="w-5 h-5" />
                     {t('payment.online' as any)}
@@ -1156,11 +1160,10 @@ export default function CashierCheckout({
                               [amt]: (prev.cashDenominations[amt] || 0) + 1
                             }
                           }))}
-                          className={`relative py-2.5 rounded-xl border font-bold active:scale-95 transition-all text-xs ${
-                            count > 0 
-                              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20' 
+                          className={`relative py-2.5 rounded-xl border font-bold active:scale-95 transition-all text-xs ${count > 0
+                              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
                               : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white'
-                          }`}
+                            }`}
                         >
                           +RM{amt}
                           {count > 0 && (
@@ -1176,8 +1179,8 @@ export default function CashierCheckout({
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      onClick={() => setCheckoutModal(prev => ({ 
-                        ...prev, 
+                      onClick={() => setCheckoutModal(prev => ({
+                        ...prev,
                         cashReceived: 0,
                         cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
                         changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }
@@ -1190,22 +1193,20 @@ export default function CashierCheckout({
 
                   {/* Balance Display */}
                   <div
-                    className={`border-2 rounded-lg p-4 ${
-                      balance < 0
+                    className={`border-2 rounded-lg p-4 ${balance < 0
                         ? 'border-red-500 bg-red-500/10'
                         : 'border-green-500 bg-green-500/10'
-                    }`}
+                      }`}
                   >
                     <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
                       {t('payment.balance' as any)}
                     </div>
                     <div
-                      className={`text-2xl font-bold ${
-                        balance < 0 ? 'text-red-400' : 'text-green-400'
-                      }`}
+                      className={`text-2xl font-bold ${balance < 0 ? 'text-red-400' : 'text-green-400'
+                        }`}
                     >
                       {formatCurrency(Math.abs(balance))}
-                    {balance < 0 ? ` ${t('payment.shortage' as any)}` : ` ${t('payment.surplus' as any)}`}
+                      {balance < 0 ? ` ${t('payment.shortage' as any)}` : ` ${t('payment.surplus' as any)}`}
                     </div>
                   </div>
 
@@ -1230,7 +1231,7 @@ export default function CashierCheckout({
                       {formatCurrency(totalChangeValue)} / {formatCurrency(balance)}
                     </span>
                   </div>
-                  
+
                   <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                     {[1, 5, 10, 20, 50, 100].map((amt) => {
                       const count = checkoutModal.changeDenominations[amt] || 0
@@ -1245,9 +1246,8 @@ export default function CashierCheckout({
                               [amt]: (prev.changeDenominations[amt] || 0) + 1
                             }
                           }))}
-                          className={`relative py-2.5 rounded-xl border font-bold transition-all text-xs ${
-                            count > 0 ? 'bg-blue-600 border-blue-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500'
-                          }`}
+                          className={`relative py-2.5 rounded-xl border font-bold transition-all text-xs ${count > 0 ? 'bg-blue-600 border-blue-500 text-white' : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500'
+                            }`}
                         >
                           RM{amt}
                           {count > 0 && <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-[10px] rounded-full flex items-center justify-center border border-white dark:border-zinc-900">{count}</span>}
@@ -1306,7 +1306,7 @@ export default function CashierCheckout({
                 <X className="w-6 h-6" />
               </button>
             </div>
-            
+
             <div className="p-6 space-y-6 max-h-[65vh] overflow-y-auto custom-scrollbar">
               <div className="grid grid-cols-1 gap-4">
                 <div>
@@ -1315,10 +1315,10 @@ export default function CashierCheckout({
                     type="text"
                     className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-lg font-mono font-bold uppercase"
                     value={editingTransaction.plateNumber}
-                    onChange={(e) => setEditingTransaction({...editingTransaction, plateNumber: e.target.value.toUpperCase()})}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, plateNumber: e.target.value.toUpperCase() })}
                   />
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">{t('intake.brand' as any)}</label>
@@ -1387,11 +1387,10 @@ export default function CashierCheckout({
                             computedPrice: newPrice
                           })
                         }}
-                        className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${
-                          editingTransaction.services[s]
+                        className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${editingTransaction.services[s]
                             ? 'bg-blue-600 border-blue-500 text-white'
                             : 'bg-zinc-100 dark:bg-zinc-800 border-transparent text-zinc-500'
-                        }`}
+                          }`}
                       >
                         {SERVICE_CATEGORIES[s][language as 'en' | 'ms']}
                       </button>
@@ -1411,11 +1410,10 @@ export default function CashierCheckout({
                         key={color}
                         type="button"
                         onClick={() => setEditingTransaction({ ...editingTransaction, color })}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
-                          editingTransaction.color === color 
-                            ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md' 
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${editingTransaction.color === color
+                            ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md'
                             : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
-                        }`}
+                          }`}
                       >
                         {t(`color.${color}` as any)}
                       </button>
@@ -1473,7 +1471,7 @@ export default function CashierCheckout({
                     className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm"
                     rows={3}
                     value={(editingTransaction as any).notes || ''}
-                    onChange={(e) => setEditingTransaction({...editingTransaction, notes: e.target.value})}
+                    onChange={(e) => setEditingTransaction({ ...editingTransaction, notes: e.target.value })}
                     placeholder={t('common.notesPlaceholder' as any) || 'Add any internal notes here...'}
                   />
                 </div>
