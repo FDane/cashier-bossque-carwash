@@ -1,7 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, useRef, useCallback } from 'react'
-import { Car, Sparkles, Zap, Shield, CheckCircle2, Clock, CreditCard, Banknote, Tag, Package, Loader } from 'lucide-react'
+import React, {
+  useState, useEffect, useRef, useCallback, useMemo, memo
+} from 'react'
+import {
+  Car, Sparkles, Zap, Shield, CheckCircle2, Clock,
+  CreditCard, Banknote, Tag, Package, Loader,
+} from 'lucide-react'
 import { useLanguage } from '@/hooks/useLanguage'
 import { db } from '@/lib/firebase'
 import { doc, onSnapshot } from 'firebase/firestore'
@@ -42,15 +47,12 @@ interface KioskState {
   stage: 'idle' | 'selecting' | 'addons' | 'payment' | 'confirmed'
 }
 
-// ─── Local popup phase state (runs on kiosk only, not synced) ─────────────────
-// 'payment'   → show cash/QR popup with "Transaksi Diproses"
-// 'confirmed' → show full-screen "Transaksi Diterima" overlay
-// null        → no overlay
 type PopupPhase = 'payment' | 'confirmed' | null
 
-const IDLE_TIMEOUT_MS = 45_000   // 45 s of no Firestore updates → go idle
-const PROCESSING_MS = 2_500    // "Transaksi Diproses" shown for 2.5 s after payment popup opens
-const CONFIRMED_MS = 4_000    // "Transaksi Diterima" shown for 4 s before going idle
+// ─── Constants ────────────────────────────────────────────────────────────────
+const IDLE_TIMEOUT_MS = 45_000
+const PROCESSING_MS = 2_500
+const CONFIRMED_MS = 4_000
 
 const COLOR_MAP: Record<string, string> = {
   Black: '#1a1a1a', White: '#f5f5f5', Silver: '#c0c0c0', Gray: '#808080',
@@ -59,12 +61,40 @@ const COLOR_MAP: Record<string, string> = {
   Pink: '#ec4899', Brown: '#92400e', Turquoise: '#0d9488',
 }
 
+// Static — defined once, never re-created per render.
+// Icons are static React elements; labels are injected at render time.
+const SERVICE_CONFIG = {
+  exterior: { color: '#3b82f6', icon: <Sparkles className="w-4 h-4" /> },
+  interior: { color: '#8b5cf6', icon: <Shield className="w-4 h-4" /> },
+  engine: { color: '#f59e0b', icon: <Zap className="w-4 h-4" /> },
+} as const
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const fmt = (n: number) =>
   'RM ' + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 
 function formatTime(t: any): string {
   const d = t?.toDate ? t.toDate() : (t instanceof Date ? t : new Date(t))
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+}
+
+// Shallow comparison of the fields that actually drive the UI.
+// Prevents full re-renders when Firestore writes touch unrelated keys.
+function kioskStateChanged(prev: KioskState, next: KioskState): boolean {
+  if (prev.stage !== next.stage) return true
+  if (prev.totalAmount !== next.totalAmount) return true
+  if (prev.paymentMethod !== next.paymentMethod) return true
+  if (prev.cashReceived !== next.cashReceived) return true
+  if (prev.balance !== next.balance) return true
+  if (prev.transactions.length !== next.transactions.length) return true
+  if (prev.selectedAddons.length !== next.selectedAddons.length) return true
+  if (prev.miscCharges.length !== next.miscCharges.length) return true
+  // Deep-enough check for transaction contents (plate + price)
+  for (let i = 0; i < next.transactions.length; i++) {
+    const a = prev.transactions[i], b = next.transactions[i]
+    if (!a || a.id !== b.id || a.computedPrice !== b.computedPrice) return true
+  }
+  return false
 }
 
 // ─── Kiosk State Hook ─────────────────────────────────────────────────────────
@@ -78,7 +108,11 @@ function useKioskState() {
 
   const resetIdle = useCallback((next: KioskState) => {
     if (idleTimer.current) clearTimeout(idleTimer.current)
-    setState(next)
+    setState(prev => {
+      // Bail out early if nothing meaningful changed — avoids cascade re-renders
+      if (!kioskStateChanged(prev, next)) return prev
+      return next
+    })
     if (next.stage !== 'idle') {
       idleTimer.current = setTimeout(() => {
         setState(s => ({ ...s, stage: 'idle' }))
@@ -87,7 +121,7 @@ function useKioskState() {
   }, [])
 
   useEffect(() => {
-    const unsub = onSnapshot(doc(db, 'settings', 'kiosk_state'), (snapshot) => {
+    const unsub = onSnapshot(doc(db, 'settings', 'kiosk_state'), snapshot => {
       if (snapshot.exists()) resetIdle(snapshot.data() as KioskState)
     })
     return () => {
@@ -99,12 +133,9 @@ function useKioskState() {
   return state
 }
 
-export function broadcastKioskState(state: KioskState) {
-  try { localStorage.setItem('kiosk_state', JSON.stringify(state)) } catch { }
-}
-
 // ─── Car SVG ──────────────────────────────────────────────────────────────────
-function CarSilhouette({ color = '#2563eb' }: { color?: string }) {
+// memo: only re-renders when color prop changes
+const CarSilhouette = memo(function CarSilhouette({ color = '#2563eb' }: { color?: string }) {
   return (
     <svg viewBox="0 0 320 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
       <ellipse cx="160" cy="128" rx="130" ry="10" fill="rgba(0,0,0,0.25)" />
@@ -127,9 +158,32 @@ function CarSilhouette({ color = '#2563eb' }: { color?: string }) {
       <path d="M95 65 Q140 55 210 65" stroke="rgba(255,255,255,0.35)" strokeWidth="2" fill="none" strokeLinecap="round" />
     </svg>
   )
-}
+})
 
-// ─── Idle Screen ──────────────────────────────────────────────────────────────
+// ─── Footer Clock — isolated so parent never re-renders for clock ticks ───────
+const FooterClock = memo(function FooterClock() {
+  const [timeStr, setTimeStr] = useState('')
+
+  useEffect(() => {
+    const tick = () => setTimeStr(
+      new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
+    )
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [])
+
+  return (
+    <div className="px-8 py-4 border-t border-zinc-100 bg-zinc-50 flex items-center gap-2">
+      <Clock className="w-3 h-3 text-zinc-400" />
+      <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">
+        {timeStr || '--:--'}
+      </span>
+    </div>
+  )
+})
+
+
 function IdleScreen() {
   const [mounted, setMounted] = useState(false)
   const [time, setTime] = useState<Date | null>(null)
@@ -138,32 +192,61 @@ function IdleScreen() {
     setMounted(true)
     const update = () => setTime(new Date())
     update()
-    const t = setInterval(update, 1000)
-    return () => clearInterval(t)
+    const id = setInterval(update, 1000)
+    return () => clearInterval(id)
   }, [])
 
-  const timeStr = (mounted && time) ? time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true }) : ''
-  const dateStr = (mounted && time) ? time.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : ''
+  const timeStr = (mounted && time)
+    ? time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true })
+    : ''
+  const dateStr = (mounted && time)
+    ? time.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
+    : ''
 
   return (
     <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-zinc-50">
       <div className="idle-bg absolute inset-0" />
-      <div className="absolute inset-0 opacity-[0.03]"
+      <div
+        className="absolute inset-0 opacity-[0.03]"
         style={{ backgroundImage: 'radial-gradient(#000000 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}
       />
       <div className="relative z-10 flex flex-col items-center gap-8 text-center px-8">
         <div className="flex flex-col items-center gap-6">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="Bossque Carwash Logo" width={120} height={120} className="rounded-2xl object-contain shadow-2xl" />
-          <h1 className="text-center font-black text-6xl tracking-widest text-zinc-900 uppercase" style={{ fontFamily: "'Bebas Neue', sans-serif" }}>
+          <img
+            src="/logo.png"
+            alt="Bossque Carwash Logo"
+            width={120}
+            height={120}
+            className="rounded-2xl object-contain shadow-2xl"
+            // Logo is the first visible thing — load eagerly
+            loading="eager"
+            fetchPriority="high"
+          />
+          <h1
+            className="text-center font-black text-6xl tracking-widest text-zinc-900 uppercase"
+            style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)" }}
+          >
             CARWASH <span className="text-blue-600">BOSSQUE</span>
           </h1>
         </div>
         <div className="flex flex-col items-center gap-4">
-          <div className="text-zinc-900 leading-none" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: '140px', letterSpacing: '-4px' }} suppressHydrationWarning>
+          <div
+            className="text-zinc-900 leading-none"
+            style={{
+              fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)",
+              fontSize: '140px',
+              letterSpacing: '-4px',
+            }}
+            suppressHydrationWarning
+          >
             {timeStr}
           </div>
-          <p className="text-indigo-600 font-bold text-3xl uppercase tracking-widest" style={{ fontFamily: "'Bebas Neue', sans-serif" }} suppressHydrationWarning>
+          <p
+            className="text-indigo-600 font-bold text-3xl uppercase tracking-widest"
+            style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)" }}
+            suppressHydrationWarning
+          >
             {dateStr}
           </p>
         </div>
@@ -171,19 +254,23 @@ function IdleScreen() {
           Selamat Datang • Sila Tunggu Sebentar
         </p>
       </div>
+
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&display=swap');
-        .idle-bg { background: #f9fafb; animation: idlePulse 10s ease-in-out infinite; }
-        @keyframes idlePulse { 0%,100%{background-color:#f9fafb} 50%{background-color:#f3f4f6} }
+        .idle-bg {
+          background: #f9fafb;
+          animation: idlePulse 10s ease-in-out infinite;
+        }
+        @keyframes idlePulse {
+          0%, 100% { background-color: #f9fafb; }
+          50%       { background-color: #f3f4f6; }
+        }
       `}</style>
     </div>
   )
 }
 
 // ─── Payment Popup ─────────────────────────────────────────────────────────────
-// Shows inside the overlay. phase = 'payment' means "Transaksi Diproses" banner
-// is visible at the top; once phase flips to 'confirmed' this whole popup is gone.
-function PaymentPopup({
+const PaymentPopup = memo(function PaymentPopup({
   paymentMethod, totalAmount, cashReceived, balance, phase,
 }: {
   paymentMethod: 'CASH' | 'ONLINE'
@@ -195,118 +282,147 @@ function PaymentPopup({
   const { t } = useLanguage()
   const isProcessing = phase === 'payment'
 
+  const statusBadge = (
+    <div
+      className="flex items-center gap-3 px-5 py-2.5 w-full justify-center"
+      style={{
+        background: 'rgba(251,191,36,0.10)',
+        border: '1px solid rgba(251,191,36,0.25)',
+        borderRadius: 16,
+      }}
+    >
+      {isProcessing
+        ? <>
+          <span className="spin-icon"><Loader className="w-4 h-4 text-amber-400" /></span>
+          <span className="text-amber-400 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span>
+        </>
+        : <>
+          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+          <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span>
+        </>
+      }
+    </div>
+  )
+
   if (paymentMethod === 'CASH') {
     return (
-      <div className="flex flex-col items-center gap-8 border border-zinc-200 bg-white"
+      <div
+        className="flex flex-col items-center gap-8 border border-zinc-200 bg-white"
         style={{ padding: 48, borderRadius: 48, maxWidth: '95%', width: 560, boxShadow: '0 40px 80px rgba(0,0,0,0.15)' }}
       >
-        {/* Method badge */}
-        <div className="flex items-center gap-3 px-7 py-3" style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 100 }}>
+        <div
+          className="flex items-center gap-3 px-7 py-3"
+          style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 100 }}
+        >
           <Banknote className="w-7 h-7 text-emerald-400" />
           <span className="font-black text-emerald-600 uppercase tracking-widest text-xl">{t('payment.cash')}</span>
         </div>
 
-        {/* "Transaksi Diproses" status badge */}
-        <div
-          className="flex items-center gap-3 px-5 py-2.5 w-full justify-center"
-          style={{ background: 'rgba(251,191,36,0.10)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: 16 }}
-        >
-          {isProcessing
-            ? <><span className="spin-icon"><Loader className="w-4 h-4 text-amber-400" /></span>
-              <span className="text-amber-400 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span></>
-            : <><CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span></>
-          }
-        </div>
+        {statusBadge}
 
-        {/* Amounts */}
         <div className="text-center w-full flex flex-col gap-5">
           <div>
-            <span className="block text-zinc-500 text-xs font-black uppercase tracking-widest mb-2">{t('payment.totalAmount')}</span>
-            <div className="text-zinc-900" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 100, lineHeight: 1 }}>
+            <span className="block text-zinc-500 text-xs font-black uppercase tracking-widest mb-2">
+              {t('payment.totalAmount')}
+            </span>
+            <div
+              className="text-zinc-900"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 100, lineHeight: 1 }}
+            >
               {fmt(totalAmount)}
             </div>
           </div>
           {cashReceived > 0 && (
             <div className="bg-zinc-50 border border-zinc-200 rounded-3xl p-7 flex flex-col gap-4">
               <div className="flex justify-between items-center">
-                <span className="text-zinc-500 text-xs font-black uppercase tracking-widest">{t('payment.amountReceived')}</span>
+                <span className="text-zinc-500 text-xs font-black uppercase tracking-widest">
+                  {t('payment.amountReceived')}
+                </span>
                 <span className="text-emerald-600 font-black text-2xl">{fmt(cashReceived)}</span>
               </div>
               <div className="h-px bg-zinc-200" />
               <div className="flex justify-between items-center">
-                <span className="text-zinc-500 text-xs font-black uppercase tracking-widest">{t('payment.balance')}</span>
-                <span className="font-black text-2xl" style={{ color: balance >= 0 ? '#60a5fa' : '#fb7185' }}>
+                <span className="text-zinc-500 text-xs font-black uppercase tracking-widest">
+                  {t('payment.balance')}
+                </span>
+                <span
+                  className="font-black text-2xl"
+                  style={{ color: balance >= 0 ? '#60a5fa' : '#fb7185' }}
+                >
                   {balance >= 0 ? fmt(balance) : '...'}
                 </span>
               </div>
             </div>
           )}
         </div>
-        <p className="text-center text-zinc-500 font-bold text-base">Sila berikan wang tunai kepada juruwang.</p>
+
+        <p className="text-center text-zinc-500 font-bold text-base">
+          Sila berikan wang tunai kepada juruwang.
+        </p>
       </div>
     )
   }
 
   // ONLINE / QR
   return (
-    <div className="flex flex-col items-center gap-6 border border-zinc-200 bg-white"
+    <div
+      className="flex flex-col items-center gap-6 border border-zinc-200 bg-white"
       style={{ padding: 48, borderRadius: 48, maxWidth: '95%', width: 520, boxShadow: '0 40px 80px rgba(0,0,0,0.15)' }}
     >
-      {/* Method badge */}
-      <div className="flex items-center gap-3 px-7 py-3" style={{ background: 'rgba(79,70,229,0.08)', borderRadius: 100 }}>
+      <div
+        className="flex items-center gap-3 px-7 py-3"
+        style={{ background: 'rgba(79,70,229,0.08)', borderRadius: 100 }}
+      >
         <CreditCard className="w-7 h-7 text-indigo-400" />
         <span className="font-black text-indigo-600 uppercase tracking-widest text-xl">{t('payment.online')}</span>
       </div>
 
-      {/* "Transaksi Diproses" status badge */}
-      <div
-        className="flex items-center gap-3 px-5 py-2.5 w-full justify-center"
-        style={{ background: 'rgba(251,191,36,0.10)', border: '1px solid rgba(251,191,36,0.25)', borderRadius: 16 }}
-      >
-        {isProcessing
-          ? <><span className="spin-icon"><Loader className="w-4 h-4 text-amber-400" /></span>
-            <span className="text-amber-400 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span></>
-          : <><CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span></>
-        }
-      </div>
+      {statusBadge}
 
-      {/* QR code */}
       <div className="bg-white p-4 border border-zinc-100 shadow-sm" style={{ width: 280, height: 280, borderRadius: 28 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src="/qr-payment.png"
           alt="Scan to Pay"
           className="w-full h-full object-contain"
-          onError={(e) => { (e.target as HTMLImageElement).src = 'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=BossqueCarwash' }}
+          loading="eager"
+          onError={e => {
+            ; (e.target as HTMLImageElement).src =
+              'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=BossqueCarwash'
+          }}
         />
       </div>
+
       <p className="text-center text-zinc-500 font-bold text-lg" style={{ maxWidth: 340, lineHeight: 1.4 }}>
         {t('payment.qrInstruction')}
       </p>
-      <div className="text-indigo-600 font-black" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 60, letterSpacing: 2 }}>
+      <div
+        className="text-indigo-600 font-black"
+        style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 60, letterSpacing: 2 }}
+      >
         {fmt(totalAmount)}
       </div>
     </div>
   )
-}
+})
 
 // ─── Confirmed Overlay ─────────────────────────────────────────────────────────
-// Full-screen green overlay shown after payment popup, before going idle.
-// Shows a countdown so customers know how long it'll stay up.
-function ConfirmedOverlay({ totalAmount, onDone }: { totalAmount: number; onDone: () => void }) {
+const ConfirmedOverlay = memo(function ConfirmedOverlay({
+  totalAmount,
+  onDone,
+}: {
+  totalAmount: number
+  onDone: () => void
+}) {
   const [countdown, setCountdown] = useState(Math.round(CONFIRMED_MS / 1000))
 
   useEffect(() => {
-    // Count down every second
     const ticker = setInterval(() => {
       setCountdown(c => {
         if (c <= 1) { clearInterval(ticker); return 0 }
         return c - 1
       })
     }, 1000)
-    // Trigger onDone after full duration
     const done = setTimeout(onDone, CONFIRMED_MS)
     return () => { clearInterval(ticker); clearTimeout(done) }
   }, [onDone])
@@ -316,25 +432,34 @@ function ConfirmedOverlay({ totalAmount, onDone }: { totalAmount: number; onDone
       className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-10"
       style={{ background: 'rgba(255,255,255,0.98)' }}
     >
-      {/* Big check icon */}
       <div
         className="flex items-center justify-center"
-        style={{ width: 120, height: 120, borderRadius: '50%', background: 'rgba(16,185,129,0.08)', border: '2px solid rgba(16,185,129,0.15)' }}
+        style={{
+          width: 120, height: 120, borderRadius: '50%',
+          background: 'rgba(16,185,129,0.08)',
+          border: '2px solid rgba(16,185,129,0.15)',
+        }}
       >
         <CheckCircle2 className="text-emerald-400" style={{ width: 64, height: 64 }} />
       </div>
 
-      {/* Status text */}
       <div className="flex flex-col items-center gap-4 text-center">
         <div
           className="flex items-center gap-3 px-8 py-3"
-          style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 100 }}
+          style={{
+            background: 'rgba(16,185,129,0.08)',
+            border: '1px solid rgba(16,185,129,0.15)',
+            borderRadius: 100,
+          }}
         >
           <CheckCircle2 className="w-5 h-5 text-emerald-400" />
           <span className="text-emerald-600 font-black text-lg uppercase tracking-widest">Transaksi Diterima</span>
         </div>
 
-        <div className="text-zinc-900" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 80, lineHeight: 1 }}>
+        <div
+          className="text-zinc-900"
+          style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 80, lineHeight: 1 }}
+        >
           {fmt(totalAmount)}
         </div>
 
@@ -344,7 +469,6 @@ function ConfirmedOverlay({ totalAmount, onDone }: { totalAmount: number; onDone
         </p>
       </div>
 
-      {/* Countdown bar */}
       <div className="w-64 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
         <div
           className="h-full bg-emerald-400 rounded-full countdown-bar"
@@ -353,116 +477,169 @@ function ConfirmedOverlay({ totalAmount, onDone }: { totalAmount: number; onDone
       </div>
     </div>
   )
-}
+})
+
+// ─── Helper sub-components — all memo'd ───────────────────────────────────────
+const InfoTile = memo(function InfoTile({
+  label, value, accent,
+}: {
+  label: string; value: string; accent?: string
+}) {
+  return (
+    <div className="bg-zinc-50 rounded-2xl p-3 border border-zinc-200">
+      <span className="block text-zinc-600 text-xs font-black uppercase tracking-widest mb-1">{label}</span>
+      <div className="text-zinc-900 font-extrabold text-base flex items-center gap-1.5 truncate">
+        {accent && (
+          <div
+            className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-black/5"
+            style={{ background: accent }}
+          />
+        )}
+        {value}
+      </div>
+    </div>
+  )
+})
+
+const SectionHeader = memo(function SectionHeader({
+  icon, label,
+}: {
+  icon: React.ReactNode; label: string
+}) {
+  return (
+    <div className="flex items-center gap-2 mt-4 mb-1">
+      <span className="text-zinc-400">{icon}</span>
+      <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">{label}</span>
+      <div className="flex-1 h-px bg-zinc-100" />
+    </div>
+  )
+})
+
+const LineItem = memo(function LineItem({
+  label, sublabel, amount, accent, delay,
+}: {
+  label: string; sublabel?: string; amount: number; accent?: boolean; delay?: number
+}) {
+  return (
+    <div
+      className="flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-zinc-200"
+      style={{ transition: 'opacity 0.3s', transitionDelay: `${(delay || 0) * 80}ms` }}
+    >
+      <div className="min-w-0 mr-4">
+        <span className="text-zinc-900 font-bold text-sm block truncate">{label}</span>
+        {sublabel && (
+          <span className="text-zinc-500 text-xs font-bold mt-0.5 uppercase tracking-wider block">
+            {sublabel}
+          </span>
+        )}
+      </div>
+      <div
+        className="font-black text-lg flex-shrink-0 tabular-nums"
+        style={{ color: accent ? '#2563eb' : '#3f3f46' }}
+      >
+        {fmt(amount)}
+      </div>
+    </div>
+  )
+})
 
 // ─── Active Checkout Screen ───────────────────────────────────────────────────
 function CheckoutScreen({ state }: { state: KioskState }) {
   const { t } = useLanguage()
   const [mounted, setMounted] = useState(false)
 
-  useEffect(() => {
-    setMounted(true)
-  }, [])
+  useEffect(() => { setMounted(true) }, [])
 
-  const { transactions, selectedAddons, miscCharges, paymentMethod, cashReceived, totalAmount, balance, stage } = state
+  const {
+    transactions, selectedAddons, miscCharges,
+    paymentMethod, cashReceived, totalAmount, balance, stage,
+  } = state
+
   const primaryTx = transactions[0]
   const isMulti = transactions.length > 1
   const carColor = COLOR_MAP[primaryTx?.color || ''] || '#2563eb'
-  const activeServices = Object.entries(primaryTx?.services || {}).filter(([, v]) => v).map(([k]) => k)
 
-  const SERVICE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
-    exterior: { label: t('intake.services.exterior'), icon: <Sparkles className="w-4 h-4" />, color: '#3b82f6' },
-    interior: { label: t('intake.services.interior'), icon: <Shield className="w-4 h-4" />, color: '#8b5cf6' },
-    engine: { label: t('intake.services.engine'), icon: <Zap className="w-4 h-4" />, color: '#f59e0b' },
-  }
+  const activeServices = useMemo(
+    () => Object.entries(primaryTx?.services || {}).filter(([, v]) => v).map(([k]) => k),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [primaryTx?.services]
+  )
 
-  // ── Total change flash ──
+  const SERVICE_LABELS = useMemo(() => ({
+    exterior: { ...SERVICE_CONFIG.exterior, label: t('intake.services.exterior') },
+    interior: { ...SERVICE_CONFIG.interior, label: t('intake.services.interior') },
+    engine: { ...SERVICE_CONFIG.engine, label: t('intake.services.engine') },
+  }), [t])
+
+  // ── Total change flash ──────────────────────────────────────────────────────
   const [prevTotal, setPrevTotal] = useState(totalAmount)
   const [totalChanged, setTotalChanged] = useState(false)
-  useEffect(() => {
-    let t: ReturnType<typeof setTimeout>;
 
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout>
     if (totalAmount !== prevTotal) {
       setTotalChanged(true)
       setPrevTotal(totalAmount)
-      t = setTimeout(() => setTotalChanged(false), 600)
+      timer = setTimeout(() => setTotalChanged(false), 600)
     }
-
-    // This is now executed unconditionally on every path
-    return () => {
-      if (t) clearTimeout(t)
-    }
+    return () => { if (timer) clearTimeout(timer) }
   }, [totalAmount, prevTotal])
 
-  // ── Popup phase state ──────────────────────────────────────────────────────
-  // Tracks the local popup flow independent of Firestore stage.
-  // When stage goes to 'payment': show popup with "Diproses" for PROCESSING_MS,
-  // then flip to "Diterima" label. When stage goes to 'confirmed': jump straight
-  // to the ConfirmedOverlay then idle.
+  // ── Popup phase state ───────────────────────────────────────────────────────
   const [popupPhase, setPopupPhase] = useState<PopupPhase>(null)
   const popupTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
-  const clearPopupTimers = () => {
+  const clearPopupTimers = useCallback(() => {
     popupTimers.current.forEach(clearTimeout)
     popupTimers.current = []
-  }
+  }, [])
 
   useEffect(() => {
     if (stage === 'payment' && paymentMethod) {
-      // Show payment popup immediately with "Diproses"
       setPopupPhase('payment')
       clearPopupTimers()
-      // After PROCESSING_MS, switch label to "Diterima" (still showing popup)
-      const t1 = setTimeout(() => {
-        setPopupPhase('confirmed')
-        // Popup stays a little longer before ConfirmedOverlay takes over
-        // (ConfirmedOverlay is triggered when Firestore stage = 'confirmed')
-      }, PROCESSING_MS)
+      const t1 = setTimeout(() => setPopupPhase('confirmed'), PROCESSING_MS)
       popupTimers.current.push(t1)
     } else if (stage === 'confirmed') {
-      // CashierCheckout set stage to confirmed — jump straight to full overlay
       clearPopupTimers()
       setPopupPhase('confirmed')
     } else if (stage === 'idle') {
       clearPopupTimers()
       setPopupPhase(null)
     } else {
-      // selecting / addons
       clearPopupTimers()
       setPopupPhase(null)
     }
     return clearPopupTimers
-  }, [stage, paymentMethod])
+  }, [stage, paymentMethod, clearPopupTimers])
 
-  // When ConfirmedOverlay's countdown ends, go to idle locally
   const handleConfirmedDone = useCallback(() => {
     setPopupPhase(null)
-    // The Firestore idle timeout will also fire, but this cleans up the UI faster
   }, [])
 
-  // Show ConfirmedOverlay when:
-  // - Firestore stage is 'confirmed', OR
-  // - popup went through 'payment' → 'confirmed' locally and cashier already confirmed
   const showConfirmedOverlay = stage === 'confirmed' && popupPhase === 'confirmed'
   const showPaymentPopup = paymentMethod !== null && popupPhase === 'payment' && stage === 'payment'
-  // Show popup with "Diterima" label while waiting for Firestore 'confirmed'
   const showPaymentPopupConfirming = paymentMethod !== null && popupPhase === 'confirmed' && stage === 'payment'
 
   return (
-    <div className="w-full h-full flex flex-row bg-zinc-100 overflow-hidden" style={{ fontFamily: "'DM Sans', system-ui, sans-serif" }}>
-
-      {/* ── LEFT PANEL ─────────────────────────────────────────────── */}
+    <div
+      className="w-full h-full flex flex-row bg-zinc-100 overflow-hidden"
+      style={{ fontFamily: "var(--font-dm-sans, 'DM Sans', system-ui, sans-serif)" }}
+    >
+      {/* ── LEFT PANEL ───────────────────────────────────────────────── */}
       <div className="w-[35%] h-full flex flex-col border-r border-zinc-200 bg-zinc-50 overflow-hidden p-7">
         {primaryTx?.imageUrl ? (
-          <div className="w-full h-full overflow-hidden border-8 border-white shadow-xl"
+          <div
+            className="w-full h-full overflow-hidden border-8 border-white shadow-xl"
             style={{ borderRadius: 32, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img 
-              src={primaryTx.imageUrl} 
-              alt="Vehicle" 
-              className="w-full h-full object-cover" 
-              loading="lazy"
+            <img
+              src={primaryTx.imageUrl}
+              alt="Vehicle"
+              className="w-full h-full object-cover"
+              loading="eager"
+              fetchPriority="high"
               decoding="async"
             />
           </div>
@@ -473,25 +650,31 @@ function CheckoutScreen({ state }: { state: KioskState }) {
         )}
       </div>
 
-      {/* ── RIGHT PANEL ────────────────────────────────────────────── */}
+      {/* ── RIGHT PANEL ──────────────────────────────────────────────── */}
       <div className="flex-1 h-full flex flex-col bg-white overflow-hidden">
 
         {/* Header */}
         <div className="px-8 py-5 flex items-center gap-5 border-b border-zinc-200 bg-zinc-50">
-          <div className="w-12 h-12 flex items-center justify-center flex-shrink-0"
+          <div
+            className="w-12 h-12 flex items-center justify-center flex-shrink-0"
             style={{ borderRadius: 14, background: 'linear-gradient(135deg,#2563eb,#7c3aed)' }}
           >
             <Car className="w-6 h-6 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-zinc-900 leading-none mb-1 truncate"
-              style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 46, letterSpacing: 3 }}
+            <div
+              className="text-zinc-900 leading-none mb-1 truncate"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 46, letterSpacing: 3 }}
             >
-              {isMulti ? transactions.map(tx => tx.plateNumber).join(' · ') : primaryTx?.plateNumber}
+              {isMulti
+                ? transactions.map(tx => tx.plateNumber).join(' · ')
+                : primaryTx?.plateNumber}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-zinc-500 text-xs font-bold uppercase tracking-wider">
-                {!isMulti ? `${primaryTx?.brand} ${primaryTx?.model}` : `${transactions.length} ${t('payment.batch')}`}
+                {!isMulti
+                  ? `${primaryTx?.brand} ${primaryTx?.model}`
+                  : `${transactions.length} ${t('payment.batch')}`}
               </span>
               <span className="w-1 h-1 rounded-full bg-zinc-600 inline-block" />
               <span className="flex items-center gap-1 text-emerald-400 text-xs font-black uppercase tracking-wider">
@@ -508,7 +691,11 @@ function CheckoutScreen({ state }: { state: KioskState }) {
             <div className="grid grid-cols-4 gap-2 mb-2">
               <InfoTile label={t('priceBook.brand')} value={primaryTx.brand || '—'} />
               <InfoTile label={t('priceBook.model')} value={primaryTx.model || '—'} />
-              <InfoTile label={t('intake.color')} value={t(`color.${primaryTx.color}` as any) || '—'} accent={carColor} />
+              <InfoTile
+                label={t('intake.color')}
+                value={t(`color.${primaryTx.color}` as any) || '—'}
+                accent={carColor}
+              />
               <InfoTile label={t('staff.checkIn')} value={formatTime(primaryTx.checkInTime)} />
             </div>
           )}
@@ -516,9 +703,12 @@ function CheckoutScreen({ state }: { state: KioskState }) {
           {activeServices.length > 0 && (
             <div className="flex flex-wrap gap-2 mb-2">
               {activeServices.map(svc => {
-                const s = SERVICE_LABELS[svc]
+                const s = SERVICE_LABELS[svc as keyof typeof SERVICE_LABELS]
+                if (!s) return null
                 return (
-                  <div key={svc} className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border"
+                  <div
+                    key={svc}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border"
                     style={{ color: s.color, borderColor: s.color + '44', background: s.color + '11' }}
                   >
                     <span className="flex">{s.icon}</span>{s.label}
@@ -532,7 +722,9 @@ function CheckoutScreen({ state }: { state: KioskState }) {
           {transactions.map(tx => (
             <LineItem
               key={tx.id}
-              label={`${tx.brand} ${tx.model} – ${activeServices.map(s => SERVICE_LABELS[s]?.label).join(', ') || t('intake.services')}`}
+              label={`${tx.brand} ${tx.model} – ${activeServices.map(s => SERVICE_LABELS[s as keyof typeof SERVICE_LABELS]?.label).join(', ')
+                || t('intake.services')
+                }`}
               sublabel={isMulti ? tx.plateNumber : undefined}
               amount={tx.computedPrice}
             />
@@ -542,7 +734,14 @@ function CheckoutScreen({ state }: { state: KioskState }) {
             <>
               <SectionHeader icon={<Package className="w-4 h-4" />} label={t('cashier.retailAddons')} />
               {selectedAddons.map((a, i) => (
-                <LineItem key={a.id} label={a.name} sublabel={a.quantity > 1 ? `x${a.quantity}` : undefined} amount={a.price * a.quantity} accent delay={i} />
+                <LineItem
+                  key={a.id}
+                  label={a.name}
+                  sublabel={a.quantity > 1 ? `x${a.quantity}` : undefined}
+                  amount={a.price * a.quantity}
+                  accent
+                  delay={i}
+                />
               ))}
             </>
           )}
@@ -556,42 +755,47 @@ function CheckoutScreen({ state }: { state: KioskState }) {
             </>
           )}
 
-          <div className="h-4 flex-shrink-0" /> {/* Spacer */}
+          <div className="h-4 flex-shrink-0" />
         </div>
 
         {/* Pinned Grand Total */}
-        <div 
+        <div
           className="px-8 py-6 border-t border-zinc-200 bg-zinc-50"
-          style={{ transition: 'transform 0.3s, opacity 0.3s', transform: totalChanged ? 'scale(1.02)' : 'scale(1)', opacity: totalChanged ? 0.95 : 1 }}
+          style={{
+            transition: 'transform 0.3s, opacity 0.3s',
+            transform: totalChanged ? 'scale(1.02)' : 'scale(1)',
+            opacity: totalChanged ? 0.95 : 1,
+          }}
         >
           <div className="flex items-center justify-between">
             <div>
-              <span className="block text-zinc-600 text-xs font-black uppercase tracking-widest mb-1">{t('payment.totalAmount')}</span>
+              <span className="block text-zinc-600 text-xs font-black uppercase tracking-widest mb-1">
+                {t('payment.totalAmount')}
+              </span>
               <p className="text-zinc-500 text-sm font-bold">
                 {t('payment.totalCars')} {transactions.length}
                 {selectedAddons.length > 0 ? ` + ${selectedAddons.length} item` : ''}
               </p>
             </div>
-            <div className="text-zinc-900" style={{ fontFamily: "'Bebas Neue', sans-serif", fontSize: 68 }}>
+            <div
+              className="text-zinc-900"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 68 }}
+            >
               {fmt(totalAmount)}
             </div>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="px-8 py-4 border-t border-zinc-100 bg-zinc-50 flex items-center gap-2">
-          <Clock className="w-3 h-3 text-zinc-400" />
-          <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">
-            {mounted 
-              ? new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }) 
-              : '--:--'}
-          </span>
-        </div>
+        {/* Footer clock — isolated component, no parent re-renders for ticks */}
+        {mounted && <FooterClock />}
       </div>
 
-      {/* ── PAYMENT POPUP (Diproses / Diterima label) ───────────────── */}
+      {/* ── PAYMENT POPUP ───────────────────────────────────────────── */}
       {(showPaymentPopup || showPaymentPopupConfirming) && paymentMethod && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(255,255,255,0.9)' }}>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center"
+          style={{ background: 'rgba(255,255,255,0.9)' }}
+        >
           <PaymentPopup
             paymentMethod={paymentMethod}
             totalAmount={totalAmount}
@@ -602,22 +806,19 @@ function CheckoutScreen({ state }: { state: KioskState }) {
         </div>
       )}
 
-      {/* ── CONFIRMED OVERLAY (full-screen, with countdown) ─────────── */}
+      {/* ── CONFIRMED OVERLAY ────────────────────────────────────────── */}
       {showConfirmedOverlay && (
         <ConfirmedOverlay totalAmount={totalAmount} onDone={handleConfirmedDone} />
       )}
 
+      {/* Shared CSS — no @import, fonts come from next/font in layout.tsx */}
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;700;800;900&display=swap');
-
-        .live-dot { animation: livePulse 2s ease-in-out infinite; }
+        .live-dot   { animation: livePulse 2s ease-in-out infinite; }
         @keyframes livePulse { 0%,100%{opacity:0.5} 50%{opacity:1} }
 
-        /* Spinning loader icon — CSS only */
-        .spin-icon { display:inline-flex; animation: spin 1s linear infinite; }
+        .spin-icon  { display:inline-flex; animation: spin 1s linear infinite; }
         @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
 
-        /* Countdown progress bar — shrinks from 100% to 0% */
         .countdown-bar { animation: shrink linear forwards; }
         @keyframes shrink { from{width:100%} to{width:0%} }
 
@@ -629,47 +830,6 @@ function CheckoutScreen({ state }: { state: KioskState }) {
   )
 }
 
-// ─── Helper components ────────────────────────────────────────────────────────
-function InfoTile({ label, value, accent }: { label: string; value: string; accent?: string }) {
-  return (
-    <div className="bg-zinc-50 rounded-2xl p-3 border border-zinc-200">
-      <span className="block text-zinc-600 text-xs font-black uppercase tracking-widest mb-1">{label}</span>
-      <div className="text-zinc-900 font-extrabold text-base flex items-center gap-1.5 truncate">
-        {accent && <div className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-black/5" style={{ background: accent }} />}
-        {value}
-      </div>
-    </div>
-  )
-}
-
-function SectionHeader({ icon, label }: { icon: React.ReactNode; label: string }) {
-  return (
-    <div className="flex items-center gap-2 mt-4 mb-1">
-      <span className="text-zinc-400">{icon}</span>
-      <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">{label}</span>
-      <div className="flex-1 h-px bg-zinc-100" />
-    </div>
-  )
-}
-
-function LineItem({ label, sublabel, amount, accent, delay }: {
-  label: string; sublabel?: string; amount: number; accent?: boolean; delay?: number
-}) {
-  return (
-    <div className="flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-zinc-200"
-      style={{ transition: 'opacity 0.3s', transitionDelay: `${(delay || 0) * 80}ms` }}
-    >
-      <div className="min-w-0 mr-4">
-        <span className="text-zinc-900 font-bold text-sm block truncate">{label}</span>
-        {sublabel && <span className="text-zinc-500 text-xs font-bold mt-0.5 uppercase tracking-wider block">{sublabel}</span>}
-      </div>
-      <div className="font-black text-lg flex-shrink-0 tabular-nums" style={{ color: accent ? '#2563eb' : '#3f3f46' }}>
-        {fmt(amount)}
-      </div>
-    </div>
-  )
-}
-
 // ─── Main Export ──────────────────────────────────────────────────────────────
 export default function KioskDisplay() {
   const state = useKioskState()
@@ -677,8 +837,7 @@ export default function KioskDisplay() {
     <div className="w-screen h-screen overflow-hidden bg-zinc-100">
       {state.stage === 'idle' || state.transactions.length === 0
         ? <IdleScreen />
-        : <CheckoutScreen state={state} />
-      }
+        : <CheckoutScreen state={state} />}
     </div>
   )
 }
