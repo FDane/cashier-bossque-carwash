@@ -3,7 +3,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import {
   Plus,
-  Loader2, X, Camera,
+  Loader2, Monitor, Camera,
   Check,
   Car,
   Sparkles,
@@ -17,60 +17,60 @@ import { createTransaction, listenToFullPriceBook, uploadImageToFirebase, update
 import { showToast } from '@/lib/toast'
 import { formatCurrency } from '@/lib/utils'
 import { resizeImage } from '@/lib/imageUtils'
+import CameraModal from './CameraModal'
 
 interface CarEntryIntakeProps {
   onTransactionAdded?: (transaction: any) => void
 }
 
 const CAR_COLORS = [
-  'Black',
-  'White',
-  'Silver',
-  'Gray',
-  'Blue',
-  'Red',
-  'Gold',
-  'Beige',
-  'Green',
-  'Orange',
-  'Purple',
-  'Yellow',
-  'Pink',
-  'Brown',
-  'Turquoise',
+  'Black', 'White', 'Silver', 'Gray', 'Blue', 'Red', 'Gold', 'Beige',
+  'Green', 'Orange', 'Purple', 'Yellow', 'Pink', 'Brown', 'Turquoise',
 ]
 
 const SERVICE_CATEGORIES = {
   exterior: { ms: 'Luar', en: 'Exterior' },
   interior: { ms: 'Dalam', en: 'Interior' },
-  engine: { ms: 'Enjin', en: 'Engine' },
+  engine:   { ms: 'Enjin', en: 'Engine' },
 }
 
 export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakeProps) {
+  const [isDesktop, setIsDesktop] = useState(false)
+  const [showCamera, setShowCamera] = useState(false)
   const { t, language } = useLanguage()
   const [loading, setLoading] = useState(false)
   const [priceBook, setPriceBook] = useState<any[]>([])
-  const [imageFile, setImageFile] = useState<File | null>(null) // New state for image file
-  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null) // New state for image preview
-  const fileInputRef = React.useRef<HTMLInputElement>(null) // Ref for hidden file input
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null)
+  const fileInputRef = React.useRef<HTMLInputElement>(null)
   const [formData, setFormData] = useState<IntakeFormData>({
     plateNumber: '',
     brand: '',
     color: '',
-    services: {
-      exterior: false,
-      interior: false,
-      engine: false,
-    },
+    services: { exterior: false, interior: false, engine: false },
   })
+  const [selectedModels, setSelectedModels] = useState<string[]>([])
 
-  // New function to handle image capture
+  // Load Price Book from Firebase
+  useEffect(() => {
+    const unsub = listenToFullPriceBook((items) => setPriceBook(items))
+    return () => unsub()
+  }, [])
+
+  useEffect(() => {
+    const handleResize = () => setIsDesktop(window.innerWidth >= 1024)
+    handleResize()
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
+
+  // ─── Image helpers ──────────────────────────────────────────────────────────
+
+  /** Called by the hidden <input type="file"> — mobile path */
   const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      // Create a preview URL
       setImagePreviewUrl(URL.createObjectURL(file))
-      // Store the file for later processing (e.g., resizing and upload)
       setImageFile(file)
     } else {
       setImagePreviewUrl(null)
@@ -78,157 +78,85 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     }
   }
 
-  // New function to trigger file input click
-  const [selectedModels, setSelectedModels] = useState<string[]>([])
+  /** Called by CameraModal with the CCTV snapshot File — desktop path */
+  const handleCCTVCapture = (file: File) => {
+    // Revoke previous preview URL to avoid memory leaks
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl)
+    setImageFile(file)
+    setImagePreviewUrl(URL.createObjectURL(file))
+    setShowCamera(false)
+  }
 
-  // Load Price Book from Firebase
-  useEffect(() => {
-    const unsub = listenToFullPriceBook((items) => {
-      setPriceBook(items)
-    })
-    return () => unsub()
-  }, [])
+  const triggerImageCapture = () => fileInputRef.current?.click()
 
-  // Get unique brands from price book
+  // ─── Price book derived state ───────────────────────────────────────────────
+
   const availableBrands = useMemo(() => {
-    const brands = priceBook.map(item => item.brand)
-    return Array.from(new Set(brands)).sort()
+    return Array.from(new Set(priceBook.map(i => i.brand))).sort()
   }, [priceBook])
 
-  // Get models for selected brand from price book
   const availableModels = useMemo(() => {
     if (!formData.brand) return []
-    return priceBook
-      .filter(item => item.brand === formData.brand)
-      .map(item => item.model)
-      .sort()
+    return priceBook.filter(i => i.brand === formData.brand).map(i => i.model).sort()
   }, [formData.brand, priceBook])
 
-  // Calculate estimated price based on selected services
   const estimatedPrice = useMemo(() => {
     const selectedModelData = priceBook.find(
       it => it.brand === formData.brand && it.model === selectedModels[0]
     )
-
     if (!selectedModelData) return 0
-
     const { exterior, interior, engine } = formData.services
-
-    // Rule: If all three checkboxes are unchecked, total price is 0
     if (!exterior && !interior && !engine) return 0
-
-    // Rule: Vacuum Only Case (Engine=F, Exterior=F, Interior=T)
-    if (interior && !exterior && !engine) {
-      return selectedModelData.vaccuum_price || 0
-    }
+    if (interior && !exterior && !engine) return selectedModelData.vaccuum_price || 0
 
     let total = 0
-
-    // Rule: Full Package Wash (Exterior + Interior)
-    if (exterior && interior) {
-      total = selectedModelData.interior_price || 0
-    }
-    // Rule: Exterior Only Wash (Exterior=T, Interior=F)
-    else if (exterior && !interior) {
-      total = selectedModelData.exterior_price || 0
-    }
-    // Edge Case: Interior + Engine (No Exterior) - Treat Interior as Vacuum base
-    else if (!exterior && interior) {
-      total = selectedModelData.vaccuum_price || 0
-    }
-
-    // Add Engine price if checked
-    if (engine) {
-      total += selectedModelData.engine_price || 0
-    }
-
+    if (exterior && interior)       total = selectedModelData.interior_price || 0
+    else if (exterior && !interior) total = selectedModelData.exterior_price || 0
+    else if (!exterior && interior) total = selectedModelData.vaccuum_price  || 0
+    if (engine) total += selectedModelData.engine_price || 0
     return total
   }, [formData.services, formData.brand, selectedModels, priceBook])
 
-  const handlePlateNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      plateNumber: e.target.value.toUpperCase().replace(/[^A-Z0-9\s]/g, ''),
-    })
-  }
+  // ─── Form handlers ──────────────────────────────────────────────────────────
+
+  const handlePlateNumberChange = (e: React.ChangeEvent<HTMLInputElement>) =>
+    setFormData({ ...formData, plateNumber: e.target.value.toUpperCase().replace(/[^A-Z0-9\s]/g, '') })
 
   const handleBrandChange = (brand: string) => {
-    setFormData({
-      ...formData,
-      brand,
-    })
+    setFormData({ ...formData, brand })
     setSelectedModels([])
   }
 
-  const handleColorChange = (color: string) => {
-    setFormData({
-      ...formData,
-      color,
-    })
-  }
+  const handleColorChange  = (color: string)  => setFormData({ ...formData, color })
+  const handleServiceChange = (service: keyof CarService) =>
+    setFormData({ ...formData, services: { ...formData.services, [service]: !formData.services[service] } })
 
-  const handleServiceChange = (service: keyof CarService) => {
-    setFormData({
-      ...formData,
-      services: {
-        ...formData.services,
-        [service]: !formData.services[service],
-      },
-    })
-  }
-
-  const triggerImageCapture = () => {
-    fileInputRef.current?.click()
-  }
+  // ─── Submit ─────────────────────────────────────────────────────────────────
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    // Validation
-    if (!formData.plateNumber.trim()) {
-      showToast.error(t('intake.error.plateRequired' as any))
-      return
-    }
-
-    if (!formData.brand) {
-      showToast.error(t('intake.error.brandRequired' as any))
-      return
-    }
-
-    if (estimatedPrice === 0) {
-      showToast.error(t('intake.error.priceZero' as any))
-      return
-    }
+    if (!formData.plateNumber.trim()) { showToast.error(t('intake.error.plateRequired' as any)); return }
+    if (!formData.brand)              { showToast.error(t('intake.error.brandRequired' as any));  return }
+    if (estimatedPrice === 0)         { showToast.error(t('intake.error.priceZero' as any));      return }
 
     setLoading(true)
-
     try {
-      // Format plate number: trim, remove internal extra spaces, ensure space between letters and numbers
       const formattedPlate = formData.plateNumber
-        .trim()
-        .toUpperCase()
-        .replace(/\s+/g, '') // Remove all existing spaces to re-format consistently
+        .trim().toUpperCase()
+        .replace(/\s+/g, '')
         .replace(/([A-Z]+)(\d+)/g, '$1 $2')
-        .replace(/(\d+)([A-Z]+)/g, '$1 $2');
+        .replace(/(\d+)([A-Z]+)/g, '$1 $2')
 
-      // Create the transaction first to get an ID
       const transactionId = await createTransaction(
-        formattedPlate,
-        formData.brand,
-        selectedModels[0] || 'Unknown',
-        formData.color || 'Unknown',
-        formData.services,
-        estimatedPrice
+        formattedPlate, formData.brand,
+        selectedModels[0] || 'Unknown', formData.color || 'Unknown',
+        formData.services, estimatedPrice
       )
 
       if (imageFile) {
         try {
           const compressed = await resizeImage(imageFile)
-          const { imageUrl, imagePath } = await uploadImageToFirebase(
-            compressed,
-            transactionId,
-            formattedPlate
-          )
+          const { imageUrl, imagePath } = await uploadImageToFirebase(compressed, transactionId, formattedPlate)
           await updateTransaction(transactionId, { imageUrl, imagePath })
         } catch (uploadError) {
           console.error('Error uploading transaction image:', uploadError)
@@ -238,27 +166,13 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
 
       showToast.success(t('intake.success' as any))
 
-      // Reset form
-      setFormData({
-        plateNumber: '',
-        brand: '',
-        color: '',
-        services: {
-          exterior: false,
-          interior: false,
-          engine: false,
-        },
-      })
+      setFormData({ plateNumber: '', brand: '', color: '', services: { exterior: false, interior: false, engine: false } })
+      setSelectedModels([])
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl)
       setImageFile(null)
       setImagePreviewUrl(null)
 
-      onTransactionAdded?.({
-        id: transactionId,
-        plateNumber: formattedPlate,
-        brand: formData.brand,
-        model: selectedModels[0] || '',
-        computedPrice: estimatedPrice,
-      })
+      onTransactionAdded?.({ id: transactionId, plateNumber: formattedPlate, brand: formData.brand, model: selectedModels[0] || '', computedPrice: estimatedPrice })
     } catch (error) {
       console.error('Error creating transaction:', error)
       showToast.error(t('payment.error' as any))
@@ -266,6 +180,8 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
       setLoading(false)
     }
   }
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <div className="relative bg-white dark:bg-zinc-900/90 sm:backdrop-blur-xl rounded-[2rem] border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-2xl transition-all duration-300 mt-4 sm:mt-0 mb-6">
@@ -279,8 +195,19 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
         </div>
       </div>
 
+      {/* Hidden file input — used only on mobile */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="hidden"
+        onChange={handleImageCapture}
+      />
+
       <form onSubmit={handleSubmit} className="space-y-5">
-        {/* Plate Number Input */}
+
+        {/* Plate Number */}
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             {t('intake.plateNumber' as any)}
@@ -294,6 +221,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           />
         </div>
 
+        {/* Brand */}
         <div className="space-y-2">
           <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             {t('intake.brand' as any)}
@@ -305,14 +233,13 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
               className="w-full appearance-none bg-zinc-100 dark:bg-zinc-800/50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3.5 text-zinc-900 dark:text-white font-bold outline-none transition-all"
             >
               <option value="">{t('intake.brand.placeholder' as any)}</option>
-              {availableBrands.map((brand) => (
-                <option key={brand} value={brand}>{brand}</option>
-              ))}
+              {availableBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
           </div>
         </div>
 
+        {/* Model */}
         <div className="space-y-2">
           <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             {t('intake.model' as any)}
@@ -325,15 +252,13 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
               className="w-full appearance-none bg-zinc-100 dark:bg-zinc-800/50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3.5 text-zinc-900 dark:text-white font-bold outline-none transition-all disabled:opacity-50"
             >
               <option value="">{t('intake.model.placeholder' as any)}</option>
-              {availableModels.map((model) => (
-                <option key={model} value={model}>{model}</option>
-              ))}
+              {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
             </select>
             <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400 pointer-events-none" />
           </div>
         </div>
 
-        {/* Color Selection */}
+        {/* Color */}
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             <Palette className="w-3.5 h-3.5" />
@@ -345,10 +270,11 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                 key={color}
                 type="button"
                 onClick={() => handleColorChange(color)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${formData.color === color
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
+                  formData.color === color
                     ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md'
                     : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
-                  }`}
+                }`}
               >
                 {t(`color.${color}` as any)}
               </button>
@@ -356,45 +282,34 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
         </div>
 
-        {/* Service Types - Toggle Switches */}
+        {/* Services */}
         <div className="space-y-3">
           <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             {t('intake.services' as any)} *
           </label>
           <div className="grid grid-cols-1 gap-3">
-            {(
-              Object.keys(SERVICE_CATEGORIES) as Array<keyof typeof SERVICE_CATEGORIES>
-            ).map((service) => {
-              const selectedModelData = priceBook.find(
-                it => it.brand === formData.brand && it.model === selectedModels[0]
-              )
+            {(Object.keys(SERVICE_CATEGORIES) as Array<keyof typeof SERVICE_CATEGORIES>).map((service) => {
+              const selectedModelData = priceBook.find(it => it.brand === formData.brand && it.model === selectedModels[0])
               const isSelected = formData.services[service]
-
               let displayPrice = 0
               if (selectedModelData) {
                 if (service === 'exterior') displayPrice = selectedModelData.exterior_price
-                if (service === 'engine') displayPrice = selectedModelData.engine_price
-                if (service === 'interior') {
-                  displayPrice = formData.services.exterior
-                    ? selectedModelData.interior_price
-                    : selectedModelData.vaccuum_price
-                }
+                if (service === 'engine')   displayPrice = selectedModelData.engine_price
+                if (service === 'interior') displayPrice = formData.services.exterior ? selectedModelData.interior_price : selectedModelData.vaccuum_price
               }
-
               const Icon = service === 'exterior' ? Car : service === 'interior' ? Sparkles : Zap
-
               return (
                 <button
                   key={service}
                   type="button"
                   onClick={() => handleServiceChange(service)}
-                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 text-left ${isSelected
+                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 text-left ${
+                    isSelected
                       ? 'bg-blue-600/10 border-blue-600 dark:bg-blue-500/10 dark:border-blue-500'
                       : 'bg-zinc-100 dark:bg-zinc-800/50 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
-                    }`}
+                  }`}
                 >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400'
-                    }`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400'}`}>
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
@@ -408,8 +323,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                       {displayPrice > 0 ? formatCurrency(displayPrice) : '--'}
                     </div>
                   </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-zinc-300 dark:border-zinc-700'
-                    }`}>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-zinc-300 dark:border-zinc-700'}`}>
                     {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4]" />}
                   </div>
                 </button>
@@ -418,66 +332,70 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
         </div>
 
+        {/* Image preview (shown once a photo is taken/captured) */}
+        {imagePreviewUrl && (
+          <div className="relative rounded-2xl overflow-hidden border-2 border-blue-500">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={imagePreviewUrl} alt="Preview" className="w-full object-cover max-h-48" />
+            <button
+              type="button"
+              onClick={() => { URL.revokeObjectURL(imagePreviewUrl); setImagePreviewUrl(null); setImageFile(null) }}
+              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+              title="Remove photo"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Image Capture Section */}
-        <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
-            {t('intake.image' as any)}
-          </label>
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment" // Forces camera on mobile
-            ref={fileInputRef}
-            onChange={handleImageCapture}
-            style={{ display: 'none' }}
-          />
+        <div className="flex gap-2">
+          {/* Mobile camera / file upload button (shown always, CCTV supplements on desktop) */}
           <button
             type="button"
             onClick={triggerImageCapture}
-            className="w-full flex items-center justify-center gap-2 p-4 bg-zinc-100 dark:bg-zinc-800/50 border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-2xl text-zinc-500 hover:border-blue-500 hover:text-blue-500 transition-all"
+            className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed transition-all ${
+              imagePreviewUrl
+                ? 'bg-blue-600/10 border-blue-600 text-blue-600'
+                : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
+            }`}
           >
             <Camera className="w-5 h-5" />
             <span>{imagePreviewUrl ? t('intake.changePhoto' as any) : t('intake.uploadPhoto' as any)}</span>
           </button>
-          {imagePreviewUrl && (
-            <div className="relative w-full h-48 rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-700">
-              <img src={imagePreviewUrl} alt="Vehicle Preview" className="w-full h-full object-cover" />
-              <button
-                type="button"
-                onClick={() => { setImageFile(null); setImagePreviewUrl(null); if (fileInputRef.current) fileInputRef.current.value = ''; }} // Clear file input
-                className="absolute top-2 right-2 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition-colors"
-                title="Remove Photo"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
+
+          {/* Desktop-only CCTV monitor button */}
+          {isDesktop && (
+            <button
+              type="button"
+              onClick={() => setShowCamera(true)}
+              className="px-4 py-4 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl hover:opacity-90 transition-all shadow-lg"
+              title="Live CCTV Monitor"
+            >
+              <Monitor className="w-6 h-6" />
+            </button>
           )}
         </div>
 
-        {/* Price & Submit Section - Floating on Mobile */}
+        {/* Price & Submit — floating on mobile */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800 sm:relative sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none z-50 space-y-3">
-          {/* Estimated Price Display */}
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-3xl p-5 sm:p-6 shadow-xl shadow-blue-500/20 transition-all">
             <div className="flex justify-between items-center">
-              <span className="text-blue-100 font-bold uppercase tracking-widest text-xs">
-                {t('intake.price' as any)}
-              </span>
-              <span className="text-2xl sm:text-3xl font-black text-white">
-                {formatCurrency(estimatedPrice)}
-              </span>
+              <span className="text-blue-100 font-bold uppercase tracking-widest text-xs">{t('intake.price' as any)}</span>
+              <span className="text-2xl sm:text-3xl font-black text-white">{formatCurrency(estimatedPrice)}</span>
             </div>
           </div>
 
-          {/* Submit Button */}
           <div className="flex gap-3">
             {/* Mobile-only secondary Camera Button */}
             <button
               type="button"
               onClick={triggerImageCapture}
-              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center ${imagePreviewUrl
+              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center ${
+                imagePreviewUrl
                   ? 'bg-blue-600/10 border-blue-600 text-blue-600'
                   : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
-                }`}
+              }`}
             >
               <Camera className="w-6 h-6" />
               {imagePreviewUrl && <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 rounded-full border-2 border-white dark:border-zinc-900 shadow-sm" />}
@@ -494,6 +412,14 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
         </div>
       </form>
+
+      {/* Desktop CCTV Modal */}
+      {showCamera && (
+        <CameraModal
+          onClose={() => setShowCamera(false)}
+          onCapture={handleCCTVCapture}
+        />
+      )}
     </div>
   )
 }
