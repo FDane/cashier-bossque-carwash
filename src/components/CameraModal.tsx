@@ -19,7 +19,7 @@ const MEDIAMTX_BASE = process.env.NEXT_PUBLIC_MEDIAMTX_URL ?? 'http://localhost:
 const STREAM_PATH   = process.env.NEXT_PUBLIC_CAMERA_PATH   ?? 'camera'
 
 async function sendPTZ(command: string) {
-  await fetch('/api/camera/ptz', {
+  await fetch('https://printer.bossque.my/api/ptz', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ command }),
