@@ -1,4 +1,4 @@
-export async function resizeImage(file: File, maxWidth = 800, maxHeight = 800, quality = 0.7): Promise<File> {
+export async function resizeImage(file: File, maxWidth = 1280, maxHeight = 1280, quality = 0.75): Promise<File> {
   return new Promise((resolve) => {
     const reader = new FileReader()
     reader.readAsDataURL(file)
@@ -36,15 +36,15 @@ export async function resizeImage(file: File, maxWidth = 800, maxHeight = 800, q
               })
               resolve(resizedFile)
             } else {
-              resolve(file) // Fallback to original file if blob creation fails
+              resolve(file)
             }
           },
           'image/jpeg',
           quality
         )
       }
-      img.onerror = () => resolve(file) // Fallback to original file if image loading fails
+      img.onerror = () => resolve(file)
     }
-    reader.onerror = () => resolve(file) // Fallback to original file if file reading fails
+    reader.onerror = () => resolve(file)
   })
 }

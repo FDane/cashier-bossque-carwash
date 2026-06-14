@@ -16,6 +16,7 @@ import { useLanguage } from '@/hooks/useLanguage'
 import { createTransaction, listenToFullPriceBook, uploadImageToFirebase, updateTransaction } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency } from '@/lib/utils'
+import { resizeImage } from '@/lib/imageUtils'
 
 interface CarEntryIntakeProps {
   onTransactionAdded?: (transaction: any) => void
@@ -126,7 +127,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     // Rule: Full Package Wash (Exterior + Interior)
     if (exterior && interior) {
       total = selectedModelData.interior_price || 0
-    } 
+    }
     // Rule: Exterior Only Wash (Exterior=T, Interior=F)
     else if (exterior && !interior) {
       total = selectedModelData.exterior_price || 0
@@ -222,8 +223,9 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
 
       if (imageFile) {
         try {
+          const compressed = await resizeImage(imageFile)
           const { imageUrl, imagePath } = await uploadImageToFirebase(
-            imageFile,
+            compressed,
             transactionId,
             formattedPlate
           )
@@ -343,11 +345,10 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                 key={color}
                 type="button"
                 onClick={() => handleColorChange(color)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
-                  formData.color === color 
-                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md' 
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${formData.color === color
+                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md'
                     : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
-                }`}
+                  }`}
               >
                 {t(`color.${color}` as any)}
               </button>
@@ -368,14 +369,14 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                 it => it.brand === formData.brand && it.model === selectedModels[0]
               )
               const isSelected = formData.services[service]
-              
+
               let displayPrice = 0
               if (selectedModelData) {
                 if (service === 'exterior') displayPrice = selectedModelData.exterior_price
                 if (service === 'engine') displayPrice = selectedModelData.engine_price
                 if (service === 'interior') {
-                  displayPrice = formData.services.exterior 
-                    ? selectedModelData.interior_price 
+                  displayPrice = formData.services.exterior
+                    ? selectedModelData.interior_price
                     : selectedModelData.vaccuum_price
                 }
               }
@@ -387,15 +388,13 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                   key={service}
                   type="button"
                   onClick={() => handleServiceChange(service)}
-                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 text-left ${
-                    isSelected 
-                      ? 'bg-blue-600/10 border-blue-600 dark:bg-blue-500/10 dark:border-blue-500' 
+                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 text-left ${isSelected
+                      ? 'bg-blue-600/10 border-blue-600 dark:bg-blue-500/10 dark:border-blue-500'
                       : 'bg-zinc-100 dark:bg-zinc-800/50 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
-                  }`}
+                    }`}
                 >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${
-                    isSelected ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400'
-                  }`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400'
+                    }`}>
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
@@ -409,9 +408,8 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                       {displayPrice > 0 ? formatCurrency(displayPrice) : '--'}
                     </div>
                   </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                    isSelected ? 'bg-blue-600 border-blue-600' : 'border-zinc-300 dark:border-zinc-700'
-                  }`}>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-zinc-300 dark:border-zinc-700'
+                    }`}>
                     {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4]" />}
                   </div>
                 </button>
@@ -476,11 +474,10 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
             <button
               type="button"
               onClick={triggerImageCapture}
-              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center ${
-                imagePreviewUrl 
-                  ? 'bg-blue-600/10 border-blue-600 text-blue-600' 
+              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center ${imagePreviewUrl
+                  ? 'bg-blue-600/10 border-blue-600 text-blue-600'
                   : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
-              }`}
+                }`}
             >
               <Camera className="w-6 h-6" />
               {imagePreviewUrl && <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 rounded-full border-2 border-white dark:border-zinc-900 shadow-sm" />}
