@@ -10,6 +10,19 @@ import {
 import { useLanguage } from '@/hooks/useLanguage'
 import { db } from '@/lib/firebase'
 import { doc, onSnapshot } from 'firebase/firestore'
+import { Bebas_Neue, DM_Sans } from 'next/font/google'
+
+// Configure the fonts
+const bebasNeue = Bebas_Neue({ 
+  weight: '400', 
+  subsets: ['latin'], 
+  variable: '--font-bebas' 
+})
+
+const dmSans = DM_Sans({
+  subsets: ['latin'],
+  variable: '--font-dm-sans'
+})
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface Transaction {
@@ -406,6 +419,147 @@ const PaymentPopup = memo(function PaymentPopup({
   )
 })
 
+const CarCollage = memo(function CarCollage({
+  transactions,
+  fallbackColor,
+}: {
+  transactions: Transaction[]
+  fallbackColor: string
+}) {
+  const images = transactions.map(tx => ({
+    url: tx.imageUrl ?? null,
+    plate: tx.plateNumber,
+  }))
+
+  const hasAnyImage = images.some(img => img.url)
+
+  // If no transactions have a photo, fall back to the SVG silhouette
+  if (!hasAnyImage) {
+    return (
+      <div className="flex-1 h-full flex items-center justify-center p-8 bg-zinc-100 rounded-[24px]">
+        <CarSilhouette color={fallbackColor} />
+      </div>
+    )
+  }
+
+  const count = images.length
+
+  // Dynamic layout configuration for Portrait viewports
+  const getGridLayout = () => {
+    if (count === 1) {
+      return {
+        gridTemplateColumns: '1fr',
+        gridTemplateRows: '1fr',
+      }
+    }
+    if (count === 2) {
+      // 2 Cars: Stacked directly on top of each other (Perfect for Portrait)
+      return {
+        gridTemplateColumns: '1fr',
+        gridTemplateRows: '1fr 1fr',
+      }
+    }
+    if (count === 3) {
+      // 3 Cars: Top car gets a slightly bigger feature area, bottom 2 sit side-by-side
+      return {
+        gridTemplateColumns: '1fr 1fr',
+        gridTemplateRows: '1.2fr 1fr',
+      }
+    }
+    // 4 or more Cars: Clean, even 2x2 grid layout matrix
+    return {
+      gridTemplateColumns: '1fr 1fr',
+      gridTemplateRows: '1fr 1fr',
+    }
+  }
+
+  // Cap visible grid blocks to 4 cells max to keep layout tight
+  const cells = images.slice(0, 4)
+
+  return (
+    <div
+      className="w-full h-full overflow-hidden"
+      style={{
+        display: 'grid',
+        gap: '6px', // Distinct separator for professional finish
+        borderRadius: 24,
+        border: '6px solid white',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.12)',
+        ...getGridLayout()
+      }}
+    >
+      {cells.map((img, i) => {
+        // Layout modifier rule for 3 cars: row item 0 spans across both columns
+        const isFeaturedRow3Car = count === 3 && i === 0
+
+        return (
+          <CollageCell
+            key={img.plate}
+            url={img.url}
+            plate={img.plate}
+            style={{
+              gridColumn: isFeaturedRow3Car ? 'span 2' : undefined,
+            }}
+          />
+        )
+      })}
+    </div>
+  )
+})
+
+const CollageCell = memo(function CollageCell({
+  url,
+  plate,
+  style,
+}: {
+  url: string | null
+  plate: string
+  style?: React.CSSProperties
+}) {
+  return (
+    <div
+      style={{
+        overflow: 'hidden',
+        position: 'relative',
+        background: '#f4f4f5',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        ...style,
+      }}
+    >
+      {url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt={plate}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+          loading="eager"
+          fetchPriority="high"
+          decoding="async"
+        />
+      ) : (
+        // Clean branded fallback placeholder inside the specific grid item if missing picture
+        <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
+          <Car className="w-8 h-8 text-zinc-300" />
+          <span className="text-xs font-black tracking-wider text-zinc-400 bg-zinc-200/50 px-2 py-0.5 rounded">
+            {plate}
+          </span>
+        </div>
+      )}
+
+      {/* Premium subtle layout touch: Overlay car plate label dynamically on every cell */}
+      {url && (
+        <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg border border-white/10">
+          <span className="text-white text-xs font-black tracking-widest uppercase">
+            {plate}
+          </span>
+        </div>
+      )}
+    </div>
+  )
+})
+
 // ─── Confirmed Overlay ─────────────────────────────────────────────────────────
 const ConfirmedOverlay = memo(function ConfirmedOverlay({
   totalAmount,
@@ -628,26 +782,12 @@ function CheckoutScreen({ state }: { state: KioskState }) {
     >
       {/* ── LEFT PANEL ───────────────────────────────────────────────── */}
       <div className="w-[35%] h-full flex flex-col border-r border-zinc-200 bg-zinc-50 overflow-hidden p-7">
-        {primaryTx?.imageUrl ? (
-          <div
-            className="w-full h-full overflow-hidden border-8 border-white shadow-xl"
-            style={{ borderRadius: 32, boxShadow: '0 20px 60px rgba(0,0,0,0.8)' }}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={primaryTx.imageUrl}
-              alt="Vehicle"
-              className="w-full h-full object-cover"
-              loading="eager"
-              fetchPriority="high"
-              decoding="async"
-            />
-          </div>
-        ) : (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <CarSilhouette color={carColor} />
-          </div>
-        )}
+        <div className="w-full h-full flex flex-col justify-between">
+          <CarCollage
+            transactions={transactions}
+            fallbackColor={carColor}
+          />
+        </div>
       </div>
 
       {/* ── RIGHT PANEL ──────────────────────────────────────────────── */}
@@ -834,7 +974,7 @@ function CheckoutScreen({ state }: { state: KioskState }) {
 export default function KioskDisplay() {
   const state = useKioskState()
   return (
-    <div className="w-screen h-screen overflow-hidden bg-zinc-100">
+    <div className={`${bebasNeue.variable} ${dmSans.variable} w-screen h-screen overflow-hidden bg-zinc-100`}>
       {state.stage === 'idle' || state.transactions.length === 0
         ? <IdleScreen />
         : <CheckoutScreen state={state} />}
