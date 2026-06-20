@@ -33,7 +33,7 @@ const CAR_COLORS = [
 const SERVICE_CATEGORIES = {
   exterior: { ms: 'Luar', en: 'Exterior' },
   interior: { ms: 'Dalam', en: 'Interior' },
-  engine:   { ms: 'Enjin', en: 'Engine' },
+  engine: { ms: 'Enjin', en: 'Engine' },
 }
 
 export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakeProps) {
@@ -79,13 +79,15 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     setAiDetected(false)
 
     try {
+      // 1. Correctly compress the image
       const compressed = await resizeImage(file)
-      // Convert file → base64
+
+      // 2. Convert the COMPRESSED file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve((reader.result as string).split(',')[1])
         reader.onerror = () => reject(new Error('Failed to read image file'))
-        reader.readAsDataURL(file)
+        reader.readAsDataURL(compressed) // 🔗 FIXED: Reading 'compressed' now!
       })
 
       const response = await fetch('/api/gemini', {
@@ -197,9 +199,9 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     if (interior && !exterior && !engine) return selectedModelData.vaccuum_price || 0
 
     let total = 0
-    if (exterior && interior)       total = selectedModelData.interior_price || 0
+    if (exterior && interior) total = selectedModelData.interior_price || 0
     else if (exterior && !interior) total = selectedModelData.exterior_price || 0
-    else if (!exterior && interior) total = selectedModelData.vaccuum_price  || 0
+    else if (!exterior && interior) total = selectedModelData.vaccuum_price || 0
     if (engine) total += selectedModelData.engine_price || 0
     return total
   }, [formData.services, formData.brand, selectedModels, priceBook])
@@ -214,7 +216,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     setSelectedModels([])
   }
 
-  const handleColorChange  = (color: string)  => setFormData({ ...formData, color })
+  const handleColorChange = (color: string) => setFormData({ ...formData, color })
   const handleServiceChange = (service: keyof CarService) =>
     setFormData({ ...formData, services: { ...formData.services, [service]: !formData.services[service] } })
 
@@ -223,8 +225,8 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!formData.plateNumber.trim()) { showToast.error(t('intake.error.plateRequired' as any)); return }
-    if (!formData.brand)              { showToast.error(t('intake.error.brandRequired' as any));  return }
-    if (estimatedPrice === 0)         { showToast.error(t('intake.error.priceZero' as any));      return }
+    if (!formData.brand) { showToast.error(t('intake.error.brandRequired' as any)); return }
+    if (estimatedPrice === 0) { showToast.error(t('intake.error.priceZero' as any)); return }
 
     setLoading(true)
     try {
@@ -308,11 +310,10 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
               type="button"
               onClick={triggerImageCapture}
               disabled={aiLoading}
-              className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
-                imagePreviewUrl
+              className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed transition-all disabled:opacity-60 disabled:cursor-not-allowed ${imagePreviewUrl
                   ? 'bg-blue-600/10 border-blue-600 text-blue-600'
                   : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
-              }`}
+                }`}
             >
               {aiLoading ? (
                 <>
@@ -461,11 +462,10 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                 key={color}
                 type="button"
                 onClick={() => handleColorChange(color)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${
-                  formData.color === color
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${formData.color === color
                     ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md'
                     : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
-                }`}
+                  }`}
               >
                 {t(`color.${color}` as any)}
               </button>
@@ -485,7 +485,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
               let displayPrice = 0
               if (selectedModelData) {
                 if (service === 'exterior') displayPrice = selectedModelData.exterior_price
-                if (service === 'engine')   displayPrice = selectedModelData.engine_price
+                if (service === 'engine') displayPrice = selectedModelData.engine_price
                 if (service === 'interior') displayPrice = formData.services.exterior ? selectedModelData.interior_price : selectedModelData.vaccuum_price
               }
               const Icon = service === 'exterior' ? Car : service === 'interior' ? Sparkles : Zap
@@ -494,11 +494,10 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                   key={service}
                   type="button"
                   onClick={() => handleServiceChange(service)}
-                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 text-left ${
-                    isSelected
+                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 text-left ${isSelected
                       ? 'bg-blue-600/10 border-blue-600 dark:bg-blue-500/10 dark:border-blue-500'
                       : 'bg-zinc-100 dark:bg-zinc-800/50 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
-                  }`}
+                    }`}
                 >
                   <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400'}`}>
                     <Icon className="w-5 h-5" />
@@ -538,11 +537,10 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
               type="button"
               onClick={triggerImageCapture}
               disabled={aiLoading}
-              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center disabled:opacity-50 ${
-                imagePreviewUrl
+              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center disabled:opacity-50 ${imagePreviewUrl
                   ? 'bg-blue-600/10 border-blue-600 text-blue-600'
                   : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
-              }`}
+                }`}
             >
               {aiLoading
                 ? <Loader2 className="w-6 h-6 animate-spin" />
