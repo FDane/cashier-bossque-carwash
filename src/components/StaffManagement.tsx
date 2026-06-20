@@ -286,7 +286,7 @@ export default function StaffManagement() {
                         src={staffMap[r.staffId].imageUrl} 
                         alt="" 
                         className="w-10 h-10 rounded-full object-cover border border-zinc-200 dark:border-zinc-800 shadow-sm opacity-50"
-                        title="Profile picture (No clock-in photo)"
+                        title={t('staff.profilePictureNoClock' as any)}
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center shadow-sm">

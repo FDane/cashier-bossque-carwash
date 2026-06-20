@@ -341,12 +341,12 @@ export default function Dashboard() {
           {/* Printer Status */}
           <button
             onClick={checkPrinter}
-            title="Click to refresh printer status"
+            title={t('status.refreshPrinter' as any)}
             className="flex items-center gap-3 group hover:opacity-80 transition-opacity"
           >
             <div className="flex items-center gap-2">
               <Printer className="w-3.5 h-3.5 text-zinc-400 group-hover:text-blue-500 transition-colors" />
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Printer</span>
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t('common.printer' as any)}</span>
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge online={printerOnline} />
@@ -359,12 +359,12 @@ export default function Dashboard() {
           {/* Kiosk Status */}
           <button
             onClick={checkKiosk}
-            title="Click to refresh kiosk status"
+            title={t('status.refreshKiosk' as any)}
             className="flex items-center gap-3 group hover:opacity-80 transition-opacity"
           >
             <div className="flex items-center gap-2">
               <Monitor className="w-3.5 h-3.5 text-zinc-400 group-hover:text-blue-500 transition-colors" />
-              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">Kiosk</span>
+              <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t('common.kiosk' as any)}</span>
             </div>
             <div className="flex items-center gap-2">
               <StatusBadge online={kioskOnline} />

@@ -6,6 +6,7 @@ import {
   ChevronUp, ChevronDown, ChevronLeft, ChevronRight,
   ZoomIn, ZoomOut, Aperture, X, Loader2, Wifi, WifiOff,
 } from 'lucide-react'
+import { useLanguage } from '@/hooks/useLanguage'
 
 interface CameraModalProps {
   onClose: () => void
@@ -85,6 +86,7 @@ async function startWebRTC(
 }
 
 export default function CameraModal({ onClose, onCapture }: CameraModalProps) {
+  const { t } = useLanguage()
   const videoRef    = useRef<HTMLVideoElement>(null)
   const pcRef       = useRef<RTCPeerConnection | null>(null)
   const canvasRef   = useRef<HTMLCanvasElement>(null)
@@ -206,9 +208,9 @@ export default function CameraModal({ onClose, onCapture }: CameraModalProps) {
   // ─── Connection badge ──────────────────────────────────────────────────────
   const StatusBadge = () => {
     const map = {
-      connecting: { icon: <Loader2 className="w-3 h-3 animate-spin" />, label: 'Menyambung…',  cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-      connected:  { icon: <Wifi    className="w-3 h-3" />,              label: 'Langsung',      cls: 'bg-green-500/20  text-green-400  border-green-500/30'  },
-      failed:     { icon: <WifiOff className="w-3 h-3" />,              label: 'Tiada Isyarat', cls: 'bg-red-500/20    text-red-400    border-red-500/30'    },
+      connecting: { icon: <Loader2 className="w-3 h-3 animate-spin" />, label: t('camera.status.connecting' as any),  cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
+      connected:  { icon: <Wifi    className="w-3 h-3" />,              label: t('camera.status.connected' as any),  cls: 'bg-green-500/20  text-green-400  border-green-500/30'  },
+      failed:     { icon: <WifiOff className="w-3 h-3" />,              label: t('camera.status.failed' as any),     cls: 'bg-red-500/20    text-red-400    border-red-500/30'    },
     }
     const s = map[status]
     return (
@@ -225,7 +227,7 @@ export default function CameraModal({ onClose, onCapture }: CameraModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <h3 className="text-white font-bold text-lg">Paparan Langsung Kamera</h3>
+            <h3 className="text-white font-bold text-lg">{t('camera.title' as any)}</h3>
             <StatusBadge />
           </div>
           <button type="button" onClick={onClose} className="text-zinc-400 hover:text-white transition-colors">
@@ -248,7 +250,7 @@ export default function CameraModal({ onClose, onCapture }: CameraModalProps) {
           {status === 'connecting' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
               <Loader2 className="w-8 h-8 text-blue-400 animate-spin" />
-              <span className="text-zinc-400 text-sm">Menyambung ke kamera…</span>
+              <span className="text-zinc-400 text-sm">{t('camera.connecting' as any)}</span>
             </div>
           )}
 
@@ -256,13 +258,13 @@ export default function CameraModal({ onClose, onCapture }: CameraModalProps) {
           {status === 'failed' && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-black/60">
               <WifiOff className="w-8 h-8 text-red-400" />
-              <span className="text-zinc-400 text-sm">Gagal menyambung ke kamera</span>
+              <span className="text-zinc-400 text-sm">{t('camera.connectFailed' as any)}</span>
               <button
                 type="button"
                 onClick={() => { window.location.reload() }}
                 className="mt-1 px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white text-xs rounded-xl transition-colors"
               >
-                Cuba Semula
+                {t('camera.retry' as any)}
               </button>
             </div>
           )}
@@ -270,7 +272,7 @@ export default function CameraModal({ onClose, onCapture }: CameraModalProps) {
           {/* Capture flash */}
           {captured && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/20 rounded-2xl pointer-events-none">
-              <span className="text-white font-black text-xl drop-shadow">📸 Gambar Diambil!</span>
+              <span className="text-white font-black text-xl drop-shadow">📸 {t('camera.captured' as any)}</span>
             </div>
           )}
         </div>
@@ -280,9 +282,9 @@ export default function CameraModal({ onClose, onCapture }: CameraModalProps) {
 
         {/* Arahan — above the controls */}
         <div className="mb-3 px-1 text-zinc-500 text-xs leading-relaxed grid grid-cols-3 gap-x-4">
-          <p><span className="text-zinc-300 font-semibold">Tahan</span> mana-mana arah untuk pan/tilt berterusan — lepas untuk berhenti.</p>
-          <p><span className="text-zinc-300 font-semibold">Tengah</span> untuk ambil gambar dari siaran langsung.</p>
-          <p><span className="text-zinc-300 font-semibold">+/−</span> zum digital sehingga 4× — gambar akan dipotong mengikut zum.</p>
+          <p>{t('camera.holdForPanTilt' as any)}</p>
+          <p>{t('camera.centerToCapture' as any)}</p>
+          <p>{t('camera.zoomNote' as any)}</p>
         </div>
 
         {/* Controls */}
@@ -302,7 +304,7 @@ export default function CameraModal({ onClose, onCapture }: CameraModalProps) {
               onClick={handleCapture}
               disabled={capturing || status !== 'connected'}
               className="flex items-center justify-center bg-blue-600 hover:bg-blue-500 active:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-xl p-3 transition-colors shadow-lg shadow-blue-500/30"
-              title="Ambil gambar"
+              title={t('camera.capture' as any)}
             >
               {capturing
                 ? <Loader2 className="w-5 h-5 animate-spin" />

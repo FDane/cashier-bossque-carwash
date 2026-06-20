@@ -462,7 +462,7 @@ export default function PastCarSearch() {
 
                 {Array.isArray(selectedTransaction.addons) && selectedTransaction.addons.length > 0 && (
                   <div>
-                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Add-ons</p>
+                    <p className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">{t('pastCars.addOns' as any)}</p>
                     <div className="space-y-2">
                       {selectedTransaction.addons.map((addon: any, idx: number) => (
                         <div key={addon.id || idx} className="flex justify-between items-center p-3 bg-zinc-50 dark:bg-zinc-800/50 rounded-2xl border border-zinc-100 dark:border-zinc-800">

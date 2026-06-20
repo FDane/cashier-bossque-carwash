@@ -85,7 +85,7 @@ export default function AppHeader() {
             <button
               onClick={toggleLanguage}
               className="flex items-center gap-2 px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 hover:border-blue-500 transition-all text-sm font-bold text-zinc-700 dark:text-zinc-300 shadow-sm"
-              title="Toggle Language"
+              title={t('common.toggleLanguage' as any)}
             >
               <Globe className="w-4 h-4 text-blue-500" />
               <span className="min-w-[20px]">{language.toUpperCase()}</span>

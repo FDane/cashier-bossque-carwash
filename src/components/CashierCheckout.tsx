@@ -774,14 +774,14 @@ export default function CashierCheckout({
                       <button
                         onClick={() => handleEditClick(transaction)}
                         className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                        title="Edit car"
+                        title={t('cashier.editTitle' as any)}
                       >
                         <Edit className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleDelete(transaction.id, transaction.imagePath)}
                         className="p-2 text-zinc-400 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
-                        title="Remove car"
+                        title={t('cashier.confirmDelete' as any)}
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -789,7 +789,7 @@ export default function CashierCheckout({
                         <button
                           onClick={() => setViewingImageUrl(transaction.imageUrl || null)}
                           className="p-2 text-zinc-400 hover:text-blue-500 hover:bg-blue-500/10 rounded-lg transition-colors"
-                          title="View car photo"
+                          title={t('payment.viewUploadedPhoto' as any)}
                         >
                           <ImageIcon className="w-4 h-4" />
                         </button>
@@ -954,12 +954,12 @@ export default function CashierCheckout({
                           onClick={() => setViewingImageUrl(checkoutModal.transactions[0].imageUrl || null)}
                           className="mt-3 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:underline"
                         >
-                          {t('payment.viewUploadedPhoto' as any) || 'View uploaded photo'}
+                          {t('payment.viewUploadedPhoto' as any)}
                         </button>
                       )}
                       {checkoutImagePreviewUrl && !checkoutModal.transactions[0].imageUrl && (
                         <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-                          {t('payment.photoSelectedNote' as any) || 'A new photo is ready to upload.'}
+                          {t('payment.photoSelectedNote' as any)}
                         </p>
                       )}
                     </div>
@@ -994,7 +994,7 @@ export default function CashierCheckout({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <label className="text-sm font-semibold text-zinc-900 dark:text-zinc-300">
-                    {t('cashier.retailAddons' as any) || 'Retail Add-ons'}
+                    {t('cashier.retailAddons' as any)}
                   </label>
                   <ShoppingBag className="w-4 h-4 text-zinc-500" />
                 </div>

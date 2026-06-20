@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   Plus,
   Loader2, Monitor, Camera,
@@ -9,7 +9,9 @@ import {
   Sparkles,
   Zap,
   Palette,
-  ChevronDown
+  ChevronDown,
+  ScanLine,
+  AlertCircle,
 } from 'lucide-react'
 import { CarService, IntakeFormData } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
@@ -51,6 +53,11 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
   })
   const [selectedModels, setSelectedModels] = useState<string[]>([])
 
+  // ─── Gemini AI state ────────────────────────────────────────────────────────
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiDetected, setAiDetected] = useState(false)
+
   // Load Price Book from Firebase
   useEffect(() => {
     const unsub = listenToFullPriceBook((items) => setPriceBook(items))
@@ -64,14 +71,88 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // ─── Gemini AI Analysis ─────────────────────────────────────────────────────
+
+  const analyzeCarWithGemini = useCallback(async (file: File, brands: string[]) => {
+    setAiLoading(true)
+    setAiError(null)
+    setAiDetected(false)
+
+    try {
+      // Convert file → base64
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve((reader.result as string).split(',')[1])
+        reader.onerror = () => reject(new Error('Failed to read image file'))
+        reader.readAsDataURL(file)
+      })
+
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          base64,
+          mimeType: file.type || 'image/jpeg',
+          availableColors: CAR_COLORS,
+        }),
+      })
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({}))
+        throw new Error(err.error ?? `Server error ${response.status}`)
+      }
+
+      const parsed = await response.json()
+      // parsed = { plateNumber, brand, model, color }
+
+      // Auto-fill plate + color (always safe to fill)
+      setFormData(prev => ({
+        ...prev,
+        plateNumber: parsed.plateNumber
+          ? parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9\s]/g, '')
+          : prev.plateNumber,
+        color: parsed.color && CAR_COLORS.includes(parsed.color) ? parsed.color : prev.color,
+        // Only set brand if it exists in the price book
+        brand: parsed.brand && brands.includes(parsed.brand) ? parsed.brand : prev.brand,
+      }))
+
+      // Auto-select model only when brand also matched
+      if (parsed.model && parsed.brand && brands.includes(parsed.brand)) {
+        const matchedModels = priceBook
+          .filter(i => i.brand === parsed.brand)
+          .map(i => i.model as string)
+        const matchedModel = matchedModels.find(
+          m => m.toLowerCase() === parsed.model.toLowerCase()
+        )
+        if (matchedModel) setSelectedModels([matchedModel])
+      }
+
+      setAiDetected(true)
+      showToast.success(t('intake.aiDetected' as any))
+    } catch (err: any) {
+      console.error('Gemini error:', err)
+      setAiError(err.message ?? 'Could not detect car details. Please fill the form manually.')
+    } finally {
+      setAiLoading(false)
+    }
+  }, [priceBook])
+
   // ─── Image helpers ──────────────────────────────────────────────────────────
+
+  const applyImage = (file: File) => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl)
+    setImageFile(file)
+    setImagePreviewUrl(URL.createObjectURL(file))
+    setAiDetected(false)
+    setAiError(null)
+    analyzeCarWithGemini(file, availableBrands)
+  }
 
   /** Called by the hidden <input type="file"> — mobile path */
   const handleImageCapture = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
-      setImagePreviewUrl(URL.createObjectURL(file))
-      setImageFile(file)
+      applyImage(file)
     } else {
       setImagePreviewUrl(null)
       setImageFile(null)
@@ -80,19 +161,24 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
 
   /** Called by CameraModal with the CCTV snapshot File — desktop path */
   const handleCCTVCapture = (file: File) => {
-    // Revoke previous preview URL to avoid memory leaks
-    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl)
-    setImageFile(file)
-    setImagePreviewUrl(URL.createObjectURL(file))
+    applyImage(file)
     setShowCamera(false)
   }
 
   const triggerImageCapture = () => fileInputRef.current?.click()
 
+  const handleRemovePhoto = () => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl)
+    setImagePreviewUrl(null)
+    setImageFile(null)
+    setAiDetected(false)
+    setAiError(null)
+  }
+
   // ─── Price book derived state ───────────────────────────────────────────────
 
   const availableBrands = useMemo(() => {
-    return Array.from(new Set(priceBook.map(i => i.brand))).sort()
+    return Array.from(new Set(priceBook.map(i => i.brand))).sort() as string[]
   }, [priceBook])
 
   const availableModels = useMemo(() => {
@@ -160,7 +246,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           await updateTransaction(transactionId, { imageUrl, imagePath })
         } catch (uploadError) {
           console.error('Error uploading transaction image:', uploadError)
-          showToast.warning('Transaction created, but image upload failed')
+          showToast.warning(t('intake.imageUploadFailed' as any))
         }
       }
 
@@ -171,6 +257,8 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl)
       setImageFile(null)
       setImagePreviewUrl(null)
+      setAiDetected(false)
+      setAiError(null)
 
       onTransactionAdded?.({ id: transactionId, plateNumber: formattedPlate, brand: formData.brand, model: selectedModels[0] || '', computedPrice: estimatedPrice })
     } catch (error) {
@@ -207,7 +295,109 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
 
       <form onSubmit={handleSubmit} className="space-y-5">
 
-        {/* Plate Number */}
+        {/* ── Image Capture Section (moved to TOP) ─────────────────────────── */}
+        <div className="space-y-3">
+          <label className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
+            <ScanLine className="w-3.5 h-3.5" />
+            {t('intake.aiScan' as any)}
+          </label>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={triggerImageCapture}
+              disabled={aiLoading}
+              className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed transition-all disabled:opacity-60 disabled:cursor-not-allowed ${
+                imagePreviewUrl
+                  ? 'bg-blue-600/10 border-blue-600 text-blue-600'
+                  : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
+              }`}
+            >
+              {aiLoading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span className="font-semibold">{t('intake.scanningAILabel' as any)}</span>
+                </>
+              ) : (
+                <>
+                  <Camera className="w-5 h-5" />
+                  <span>{imagePreviewUrl ? t('intake.changePhoto' as any) : t('intake.uploadPhoto' as any)}</span>
+                </>
+              )}
+            </button>
+
+            {/* Desktop-only CCTV monitor button */}
+            {isDesktop && (
+              <button
+                type="button"
+                onClick={() => setShowCamera(true)}
+                disabled={aiLoading}
+                className="px-4 py-4 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl hover:opacity-90 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                title={t('intake.liveCCTVMonitor' as any)}
+              >
+                <Monitor className="w-6 h-6" />
+              </button>
+            )}
+
+            {/* Re-scan button — appears after image is captured */}
+            {imageFile && !aiLoading && (
+              <button
+                type="button"
+                onClick={() => analyzeCarWithGemini(imageFile, availableBrands)}
+                className="px-4 py-4 bg-blue-600 text-white rounded-2xl hover:opacity-90 transition-all shadow-lg"
+                title={t('intake.rescanAI' as any)}
+              >
+                <Sparkles className="w-6 h-6" />
+              </button>
+            )}
+          </div>
+
+          {/* Image preview */}
+          {imagePreviewUrl && (
+            <div className="relative rounded-2xl overflow-hidden border-2 border-blue-500">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={imagePreviewUrl} alt="Preview" className="w-full object-cover max-h-48" />
+
+              {/* Remove button */}
+              <button
+                type="button"
+                onClick={handleRemovePhoto}
+                className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                title={t('intake.removePhoto' as any)}
+              >
+                ✕
+              </button>
+
+              {/* AI scanning overlay */}
+              {aiLoading && (
+                <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center gap-3">
+                  <div className="relative">
+                    <ScanLine className="w-10 h-10 text-blue-400 animate-pulse" />
+                  </div>
+                  <span className="text-white text-sm font-bold tracking-widest uppercase">{t('intake.scanningAILabel' as any)}</span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* AI success banner */}
+          {aiDetected && !aiLoading && (
+            <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-2xl px-4 py-3 text-green-700 dark:text-green-400 text-sm font-medium">
+              <Check className="w-4 h-4 flex-shrink-0" />
+              <span>{t('intake.aiDetected' as any)}</span>
+            </div>
+          )}
+
+          {/* AI error banner */}
+          {aiError && !aiLoading && (
+            <div className="flex items-start gap-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-2xl px-4 py-3 text-red-600 dark:text-red-400 text-sm">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+              <span>{aiError}</span>
+            </div>
+          )}
+        </div>
+
+        {/* ── Plate Number ──────────────────────────────────────────────────── */}
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             {t('intake.plateNumber' as any)}
@@ -221,7 +411,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           />
         </div>
 
-        {/* Brand */}
+        {/* ── Brand ─────────────────────────────────────────────────────────── */}
         <div className="space-y-2">
           <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             {t('intake.brand' as any)}
@@ -239,7 +429,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
         </div>
 
-        {/* Model */}
+        {/* ── Model ─────────────────────────────────────────────────────────── */}
         <div className="space-y-2">
           <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             {t('intake.model' as any)}
@@ -258,7 +448,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
         </div>
 
-        {/* Color */}
+        {/* ── Color ─────────────────────────────────────────────────────────── */}
         <div className="space-y-3">
           <label className="flex items-center gap-2 text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             <Palette className="w-3.5 h-3.5" />
@@ -282,7 +472,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
         </div>
 
-        {/* Services */}
+        {/* ── Services ──────────────────────────────────────────────────────── */}
         <div className="space-y-3">
           <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
             {t('intake.services' as any)} *
@@ -332,52 +522,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
         </div>
 
-        {/* Image preview (shown once a photo is taken/captured) */}
-        {imagePreviewUrl && (
-          <div className="relative rounded-2xl overflow-hidden border-2 border-blue-500">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={imagePreviewUrl} alt="Preview" className="w-full object-cover max-h-48" />
-            <button
-              type="button"
-              onClick={() => { URL.revokeObjectURL(imagePreviewUrl); setImagePreviewUrl(null); setImageFile(null) }}
-              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
-              title="Remove photo"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-
-        {/* Image Capture Section */}
-        <div className="flex gap-2">
-          {/* Mobile camera / file upload button (shown always, CCTV supplements on desktop) */}
-          <button
-            type="button"
-            onClick={triggerImageCapture}
-            className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-2xl border-2 border-dashed transition-all ${
-              imagePreviewUrl
-                ? 'bg-blue-600/10 border-blue-600 text-blue-600'
-                : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
-            }`}
-          >
-            <Camera className="w-5 h-5" />
-            <span>{imagePreviewUrl ? t('intake.changePhoto' as any) : t('intake.uploadPhoto' as any)}</span>
-          </button>
-
-          {/* Desktop-only CCTV monitor button */}
-          {isDesktop && (
-            <button
-              type="button"
-              onClick={() => setShowCamera(true)}
-              className="px-4 py-4 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 rounded-2xl hover:opacity-90 transition-all shadow-lg"
-              title="Live CCTV Monitor"
-            >
-              <Monitor className="w-6 h-6" />
-            </button>
-          )}
-        </div>
-
-        {/* Price & Submit — floating on mobile */}
+        {/* ── Price & Submit — floating on mobile ───────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800 sm:relative sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none z-50 space-y-3">
           <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-3xl p-5 sm:p-6 shadow-xl shadow-blue-500/20 transition-all">
             <div className="flex justify-between items-center">
@@ -391,19 +536,25 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
             <button
               type="button"
               onClick={triggerImageCapture}
-              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center ${
+              disabled={aiLoading}
+              className={`relative p-4 rounded-2xl border-2 transition-all sm:hidden flex items-center justify-center disabled:opacity-50 ${
                 imagePreviewUrl
                   ? 'bg-blue-600/10 border-blue-600 text-blue-600'
                   : 'bg-zinc-100 dark:bg-zinc-800/50 border-zinc-300 dark:border-zinc-700 text-zinc-500'
               }`}
             >
-              <Camera className="w-6 h-6" />
-              {imagePreviewUrl && <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 rounded-full border-2 border-white dark:border-zinc-900 shadow-sm" />}
+              {aiLoading
+                ? <Loader2 className="w-6 h-6 animate-spin" />
+                : <Camera className="w-6 h-6" />
+              }
+              {imagePreviewUrl && !aiLoading && (
+                <div className="absolute -top-1 -right-1 w-4 h-4 bg-blue-600 rounded-full border-2 border-white dark:border-zinc-900 shadow-sm" />
+              )}
             </button>
 
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || aiLoading}
               className="flex-1 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 active:scale-[0.98] disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed font-black py-4 sm:py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-lg sm:text-xl shadow-xl"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
