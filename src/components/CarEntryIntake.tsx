@@ -79,6 +79,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     setAiDetected(false)
 
     try {
+      const compressed = await resizeImage(file)
       // Convert file → base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
@@ -92,7 +93,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           base64,
-          mimeType: file.type || 'image/jpeg',
+          mimeType: compressed.type || 'image/jpeg',
           availableColors: CAR_COLORS,
         }),
       })
