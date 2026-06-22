@@ -52,7 +52,7 @@ export default function PinPadUI() {
         setIsSubmitting(false) 
       }
     } catch (err) {
-      setError('An error occurred during authentication.')
+      setError('An error occurred during authentication.' + (err instanceof Error ? ` ${err.message}` : ''))
       setIsSubmitting(false)
     }
   }
