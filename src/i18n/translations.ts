@@ -262,6 +262,12 @@ export const translations = {
     'color.Pink': 'Pink',
     'color.Turquoise': 'Turquoise',
     'color.Unknown': 'Unknown',
+
+    //Pin Pad
+    'pinPad.title': 'Enter Cashier PIN',
+    'pinPad.longPinError': 'PIN must be exactly 4 digits',
+    'pinPad.incorrectPin': 'Incorrect PIN',
+    'pinPad.authUnavailable': 'Authentication unavailable',
   },
   ms: {
     // Header
@@ -528,6 +534,12 @@ export const translations = {
     'color.Pink': 'Merah Muda',
     'color.Turquoise': 'Turquoise',
     'color.Unknown': 'Tidak Dinyatakan',
+
+    //Pin Pad
+    'pinPad.title': 'Masukkan PIN Cashier',
+    'pinPad.longPinError': 'PIN harus tepat 4 digit',
+    'pinPad.incorrectPin': 'PIN salah',
+    'pinPad.authUnavailable': 'PIN tidak tersedia',
   },
 } as const
 

@@ -98,3 +98,10 @@ export interface Customer {
   plates?: string[]
   createdAt?: Date | number
 }
+
+// Cashier auth document stored in Firestore at `settings/cashierAuth`
+export interface CashierAuthDoc {
+  activePin: string
+  // optional ISO string or Firestore timestamp
+  updatedAt?: any
+}
