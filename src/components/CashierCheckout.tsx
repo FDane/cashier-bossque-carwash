@@ -750,8 +750,8 @@ export default function CashierCheckout({
               <div
                 key={transaction.id}
                 className={`relative text-left group bg-white dark:bg-zinc-900 border-2 rounded-2xl p-5 sm:p-7 transition-all duration-300 hover:shadow-xl transform hover:-translate-y-1 ${isSelected
-                    ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-900/10 shadow-lg shadow-blue-500/5'
-                    : 'border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50'
+                  ? 'border-blue-600 bg-blue-50/30 dark:bg-blue-900/10 shadow-lg shadow-blue-500/5'
+                  : 'border-zinc-200 dark:border-zinc-800 hover:border-blue-500/50'
                   }`}
               >
                 <div className="mb-4">
@@ -1103,8 +1103,8 @@ export default function CashierCheckout({
                     type="button"
                     onClick={() => handlePaymentMethodSelect('CASH')}
                     className={`p-4 rounded-lg border-2 font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${checkoutModal.paymentMethod === 'CASH'
-                        ? 'bg-blue-600 border-blue-500 text-white'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-blue-500'
+                      ? 'bg-blue-600 border-blue-500 text-white'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-blue-500'
                       }`}
                   >
                     <Wallet className="w-5 h-5" />
@@ -1116,8 +1116,8 @@ export default function CashierCheckout({
                     type="button"
                     onClick={() => handlePaymentMethodSelect('ONLINE')}
                     className={`p-4 rounded-lg border-2 font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${checkoutModal.paymentMethod === 'ONLINE'
-                        ? 'bg-green-600 border-green-500 text-white'
-                        : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-green-500'
+                      ? 'bg-green-600 border-green-500 text-white'
+                      : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:border-green-500'
                       }`}
                   >
                     <CreditCard className="w-5 h-5" />
@@ -1161,8 +1161,8 @@ export default function CashierCheckout({
                             }
                           }))}
                           className={`relative py-2.5 rounded-xl border font-bold active:scale-95 transition-all text-xs ${count > 0
-                              ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
-                              : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white'
+                            ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-500/20'
+                            : 'bg-zinc-800 border-zinc-700 text-zinc-300 hover:bg-zinc-700 hover:text-white'
                             }`}
                         >
                           +RM{amt}
@@ -1194,8 +1194,8 @@ export default function CashierCheckout({
                   {/* Balance Display */}
                   <div
                     className={`border-2 rounded-lg p-4 ${balance < 0
-                        ? 'border-red-500 bg-red-500/10'
-                        : 'border-green-500 bg-green-500/10'
+                      ? 'border-red-500 bg-red-500/10'
+                      : 'border-green-500 bg-green-500/10'
                       }`}
                   >
                     <div className="text-xs text-zinc-400 uppercase font-semibold mb-1">
@@ -1262,7 +1262,16 @@ export default function CashierCheckout({
               {checkoutModal.paymentMethod === 'ONLINE' && (
                 <div className="bg-zinc-800 border border-zinc-700 rounded-lg p-6 text-center">
                   <div className="w-32 h-32 bg-white mx-auto mb-4 rounded-lg flex items-center justify-center">
-                    <div className="text-xs text-zinc-400">{t('payment.qrPlaceholder' as any)}</div>
+                    <img
+                      src="/qr-payment.png"
+                      alt="Scan to Pay"
+                      className="w-full h-full object-contain"
+                      loading="eager"
+                      onError={e => {
+                        ; (e.target as HTMLImageElement).src =
+                          'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=BossqueCarwash'
+                      }}
+                    />
                   </div>
                   <p className="text-zinc-400 text-sm">
                     {t('payment.qrInstruction' as any)}
@@ -1388,8 +1397,8 @@ export default function CashierCheckout({
                           })
                         }}
                         className={`px-4 py-2 rounded-xl text-sm font-bold border-2 transition-all ${editingTransaction.services[s]
-                            ? 'bg-blue-600 border-blue-500 text-white'
-                            : 'bg-zinc-100 dark:bg-zinc-800 border-transparent text-zinc-500'
+                          ? 'bg-blue-600 border-blue-500 text-white'
+                          : 'bg-zinc-100 dark:bg-zinc-800 border-transparent text-zinc-500'
                           }`}
                       >
                         {SERVICE_CATEGORIES[s][language as 'en' | 'ms']}
@@ -1411,8 +1420,8 @@ export default function CashierCheckout({
                         type="button"
                         onClick={() => setEditingTransaction({ ...editingTransaction, color })}
                         className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${editingTransaction.color === color
-                            ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md'
-                            : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
+                          ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md'
+                          : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
                           }`}
                       >
                         {t(`color.${color}` as any)}

@@ -74,8 +74,6 @@ const COLOR_MAP: Record<string, string> = {
   Pink: '#ec4899', Brown: '#92400e', Turquoise: '#0d9488',
 }
 
-// Static — defined once, never re-created per render.
-// Icons are static React elements; labels are injected at render time.
 const SERVICE_CONFIG = {
   exterior: { color: '#3b82f6', icon: <Sparkles className="w-4 h-4" /> },
   interior: { color: '#8b5cf6', icon: <Shield className="w-4 h-4" /> },
@@ -91,8 +89,6 @@ function formatTime(t: any): string {
   return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true })
 }
 
-// Shallow comparison of the fields that actually drive the UI.
-// Prevents full re-renders when Firestore writes touch unrelated keys.
 function kioskStateChanged(prev: KioskState, next: KioskState): boolean {
   if (prev.stage !== next.stage) return true
   if (prev.totalAmount !== next.totalAmount) return true
@@ -102,7 +98,6 @@ function kioskStateChanged(prev: KioskState, next: KioskState): boolean {
   if (prev.transactions.length !== next.transactions.length) return true
   if (prev.selectedAddons.length !== next.selectedAddons.length) return true
   if (prev.miscCharges.length !== next.miscCharges.length) return true
-  // Deep-enough check for transaction contents (plate + price)
   for (let i = 0; i < next.transactions.length; i++) {
     const a = prev.transactions[i], b = next.transactions[i]
     if (!a || a.id !== b.id || a.computedPrice !== b.computedPrice) return true
@@ -122,7 +117,6 @@ function useKioskState() {
   const resetIdle = useCallback((next: KioskState) => {
     if (idleTimer.current) clearTimeout(idleTimer.current)
     setState(prev => {
-      // Bail out early if nothing meaningful changed — avoids cascade re-renders
       if (!kioskStateChanged(prev, next)) return prev
       return next
     })
@@ -147,7 +141,6 @@ function useKioskState() {
 }
 
 // ─── Car SVG ──────────────────────────────────────────────────────────────────
-// memo: only re-renders when color prop changes
 const CarSilhouette = memo(function CarSilhouette({ color = '#2563eb' }: { color?: string }) {
   return (
     <svg viewBox="0 0 320 140" fill="none" xmlns="http://www.w3.org/2000/svg" className="w-full h-full">
@@ -173,7 +166,6 @@ const CarSilhouette = memo(function CarSilhouette({ color = '#2563eb' }: { color
   )
 })
 
-// ─── Footer Clock — isolated so parent never re-renders for clock ticks ───────
 const FooterClock = memo(function FooterClock() {
   const [timeStr, setTimeStr] = useState('')
 
@@ -195,7 +187,6 @@ const FooterClock = memo(function FooterClock() {
     </div>
   )
 })
-
 
 function IdleScreen() {
   const [mounted, setMounted] = useState(false)
@@ -225,14 +216,12 @@ function IdleScreen() {
       />
       <div className="relative z-10 flex flex-col items-center gap-8 text-center px-8">
         <div className="flex flex-col items-center gap-6">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src="/logo.png"
             alt="Bossque Carwash Logo"
             width={120}
             height={120}
             className="rounded-2xl object-contain shadow-2xl"
-            // Logo is the first visible thing — load eagerly
             loading="eager"
             fetchPriority="high"
           />
@@ -267,7 +256,6 @@ function IdleScreen() {
           Selamat Datang • Sila Tunggu Sebentar
         </p>
       </div>
-
       <style>{`
         .idle-bg {
           background: #f9fafb;
@@ -297,21 +285,20 @@ const PaymentPopup = memo(function PaymentPopup({
 
   const statusBadge = (
     <div
-      className="flex items-center gap-3 px-5 py-2.5 w-full justify-center"
+      className="flex items-center gap-3 px-5 py-2.5 w-full justify-center rounded-2xl"
       style={{
         background: 'rgba(251,191,36,0.10)',
         border: '1px solid rgba(251,191,36,0.25)',
-        borderRadius: 16,
       }}
     >
       {isProcessing
         ? <>
           <span className="spin-icon"><Loader className="w-4 h-4 text-amber-400" /></span>
-          <span className="text-amber-400 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span>
+          <span className="text-amber-500 font-black text-sm uppercase tracking-widest">Transaksi Diproses...</span>
         </>
         : <>
-          <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span className="text-emerald-400 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span>
+          <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          <span className="text-emerald-600 font-black text-sm uppercase tracking-widest">Transaksi Diterima</span>
         </>
       }
     </div>
@@ -319,34 +306,31 @@ const PaymentPopup = memo(function PaymentPopup({
 
   if (paymentMethod === 'CASH') {
     return (
-      <div
-        className="flex flex-col items-center gap-8 border border-zinc-200 bg-white"
-        style={{ padding: 48, borderRadius: 48, maxWidth: '95%', width: 560, boxShadow: '0 40px 80px rgba(0,0,0,0.15)' }}
-      >
+      <div className="flex flex-col items-center gap-6 p-10 w-full max-w-md">
         <div
-          className="flex items-center gap-3 px-7 py-3"
-          style={{ background: 'rgba(16,185,129,0.08)', borderRadius: 100 }}
+          className="flex items-center gap-3 px-7 py-3 rounded-full"
+          style={{ background: 'rgba(16,185,129,0.1)' }}
         >
-          <Banknote className="w-7 h-7 text-emerald-400" />
-          <span className="font-black text-emerald-600 uppercase tracking-widest text-xl">{t('payment.cash')}</span>
+          <Banknote className="w-7 h-7 text-emerald-500" />
+          <span className="font-black text-emerald-700 uppercase tracking-widest text-xl">{t('payment.cash')}</span>
         </div>
 
         {statusBadge}
 
-        <div className="text-center w-full flex flex-col gap-5">
+        <div className="text-center w-full flex flex-col gap-6 mt-4">
           <div>
-            <span className="block text-zinc-500 text-xs font-black uppercase tracking-widest mb-2">
+            <span className="block text-zinc-400 text-sm font-black uppercase tracking-widest mb-1">
               {t('payment.totalAmount')}
             </span>
             <div
               className="text-zinc-900"
-              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 100, lineHeight: 1 }}
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 80, lineHeight: 1 }}
             >
               {fmt(totalAmount)}
             </div>
           </div>
           {cashReceived > 0 && (
-            <div className="bg-zinc-50 border border-zinc-200 rounded-3xl p-7 flex flex-col gap-4">
+            <div className="bg-zinc-50 border border-zinc-200 rounded-3xl p-6 flex flex-col gap-4 shadow-sm">
               <div className="flex justify-between items-center">
                 <span className="text-zinc-500 text-xs font-black uppercase tracking-widest">
                   {t('payment.amountReceived')}
@@ -359,8 +343,8 @@ const PaymentPopup = memo(function PaymentPopup({
                   {t('payment.balance')}
                 </span>
                 <span
-                  className="font-black text-2xl"
-                  style={{ color: balance >= 0 ? '#60a5fa' : '#fb7185' }}
+                  className="font-black text-3xl"
+                  style={{ color: balance >= 0 ? '#3b82f6' : '#ef4444' }}
                 >
                   {balance >= 0 ? fmt(balance) : '...'}
                 </span>
@@ -368,32 +352,25 @@ const PaymentPopup = memo(function PaymentPopup({
             </div>
           )}
         </div>
-
-        <p className="text-center text-zinc-500 font-bold text-base">
-          Sila berikan wang tunai kepada juruwang.
-        </p>
+        <p className="text-center text-zinc-500 font-bold mt-4">Sila berikan wang tunai kepada juruwang.</p>
       </div>
     )
   }
 
   // ONLINE / QR
   return (
-    <div
-      className="flex flex-col items-center gap-6 border border-zinc-200 bg-white"
-      style={{ padding: 48, borderRadius: 48, maxWidth: '95%', width: 520, boxShadow: '0 40px 80px rgba(0,0,0,0.15)' }}
-    >
+    <div className="flex flex-col items-center gap-6 p-8 w-full max-w-md">
       <div
-        className="flex items-center gap-3 px-7 py-3"
-        style={{ background: 'rgba(79,70,229,0.08)', borderRadius: 100 }}
+        className="flex items-center gap-3 px-7 py-3 rounded-full"
+        style={{ background: 'rgba(79,70,229,0.1)' }}
       >
-        <CreditCard className="w-7 h-7 text-indigo-400" />
-        <span className="font-black text-indigo-600 uppercase tracking-widest text-xl">{t('payment.online')}</span>
+        <CreditCard className="w-7 h-7 text-indigo-500" />
+        <span className="font-black text-indigo-700 uppercase tracking-widest text-xl">{t('payment.online')}</span>
       </div>
 
       {statusBadge}
 
-      <div className="bg-white p-4 border border-zinc-100 shadow-sm" style={{ width: 280, height: 280, borderRadius: 28 }}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
+      <div className="bg-white p-4 border border-zinc-200 shadow-sm rounded-3xl" style={{ width: 260, height: 260 }}>
         <img
           src="/qr-payment.png"
           alt="Scan to Pay"
@@ -401,19 +378,19 @@ const PaymentPopup = memo(function PaymentPopup({
           loading="eager"
           onError={e => {
             ; (e.target as HTMLImageElement).src =
-              'https://api.qrserver.com/v1/create-qr-code/?size=280x280&data=BossqueCarwash'
+              'https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=BossqueCarwash'
           }}
         />
       </div>
 
-      <p className="text-center text-zinc-500 font-bold text-lg" style={{ maxWidth: 340, lineHeight: 1.4 }}>
-        {t('payment.qrInstruction')}
-      </p>
-      <div
-        className="text-indigo-600 font-black"
-        style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 60, letterSpacing: 2 }}
-      >
-        {fmt(totalAmount)}
+      <div className="text-center mt-2">
+        <p className="text-zinc-500 font-bold mb-2">{t('payment.qrInstruction')}</p>
+        <div
+          className="text-indigo-600 font-black"
+          style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 60 }}
+        >
+          {fmt(totalAmount)}
+        </div>
       </div>
     </div>
   )
@@ -433,10 +410,9 @@ const CarCollage = memo(function CarCollage({
 
   const hasAnyImage = images.some(img => img.url)
 
-  // If no transactions have a photo, fall back to the SVG silhouette
   if (!hasAnyImage) {
     return (
-      <div className="flex-1 h-full flex items-center justify-center p-8 bg-zinc-100 rounded-[24px]">
+      <div className="flex-1 h-full flex items-center justify-center p-8 bg-[#18181b] rounded-3xl shadow-inner">
         <CarSilhouette color={fallbackColor} />
       </div>
     )
@@ -444,36 +420,13 @@ const CarCollage = memo(function CarCollage({
 
   const count = images.length
 
-  // Dynamic layout configuration for Portrait viewports
   const getGridLayout = () => {
-    if (count === 1) {
-      return {
-        gridTemplateColumns: '1fr',
-        gridTemplateRows: '1fr',
-      }
-    }
-    if (count === 2) {
-      // 2 Cars: Stacked directly on top of each other (Perfect for Portrait)
-      return {
-        gridTemplateColumns: '1fr',
-        gridTemplateRows: '1fr 1fr',
-      }
-    }
-    if (count === 3) {
-      // 3 Cars: Top car gets a slightly bigger feature area, bottom 2 sit side-by-side
-      return {
-        gridTemplateColumns: '1fr 1fr',
-        gridTemplateRows: '1.2fr 1fr',
-      }
-    }
-    // 4 or more Cars: Clean, even 2x2 grid layout matrix
-    return {
-      gridTemplateColumns: '1fr 1fr',
-      gridTemplateRows: '1fr 1fr',
-    }
+    if (count === 1) return { gridTemplateColumns: '1fr', gridTemplateRows: '1fr' }
+    if (count === 2) return { gridTemplateColumns: '1fr', gridTemplateRows: '1fr 1fr' }
+    if (count === 3) return { gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1.2fr 1fr' }
+    return { gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }
   }
 
-  // Cap visible grid blocks to 4 cells max to keep layout tight
   const cells = images.slice(0, 4)
 
   return (
@@ -481,25 +434,22 @@ const CarCollage = memo(function CarCollage({
       className="w-full h-full overflow-hidden"
       style={{
         display: 'grid',
-        gap: '6px', // Distinct separator for professional finish
+        gap: '4px',
         borderRadius: 24,
-        border: '6px solid white',
-        boxShadow: '0 20px 40px rgba(0,0,0,0.12)',
+        background: '#000',
+        border: '4px solid #18181b',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.1)',
         ...getGridLayout()
       }}
     >
       {cells.map((img, i) => {
-        // Layout modifier rule for 3 cars: row item 0 spans across both columns
         const isFeaturedRow3Car = count === 3 && i === 0
-
         return (
           <CollageCell
             key={img.plate}
             url={img.url}
             plate={img.plate}
-            style={{
-              gridColumn: isFeaturedRow3Car ? 'span 2' : undefined,
-            }}
+            style={{ gridColumn: isFeaturedRow3Car ? 'span 2' : undefined }}
           />
         )
       })}
@@ -508,20 +458,18 @@ const CarCollage = memo(function CarCollage({
 })
 
 const CollageCell = memo(function CollageCell({
-  url,
-  plate,
-  style,
+  url, plate, style,
 }: {
-  url: string | null
-  plate: string
-  style?: React.CSSProperties
+  url: string | null; plate: string; style?: React.CSSProperties
 }) {
+  const [imgLoaded, setImgLoaded] = useState(false)
+
   return (
     <div
       style={{
         overflow: 'hidden',
         position: 'relative',
-        background: '#f4f4f5',
+        background: '#18181b', // Premium dark background for "contain" images
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -529,28 +477,36 @@ const CollageCell = memo(function CollageCell({
       }}
     >
       {url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={url}
-          alt={plate}
-          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-          loading="eager"
-          fetchPriority="high"
-          decoding="async"
-        />
+        <>
+          {/* Loading Shimmer (Skeleton) */}
+          {!imgLoaded && (
+            <div className="absolute inset-0 bg-zinc-800 animate-pulse flex items-center justify-center">
+               <Loader className="w-8 h-8 text-zinc-600 animate-spin" />
+            </div>
+          )}
+          <img
+            src={url}
+            alt={plate}
+            onLoad={() => setImgLoaded(true)}
+            // Changed to contain: prevents portrait/landscape cropping
+            style={{ 
+              width: '100%', 
+              height: '100%', 
+              objectFit: 'contain', 
+              opacity: imgLoaded ? 1 : 0, 
+              transition: 'opacity 0.4s ease' 
+            }}
+          />
+        </>
       ) : (
-        // Clean branded fallback placeholder inside the specific grid item if missing picture
         <div className="flex flex-col items-center justify-center gap-2 p-4 text-center">
-          <Car className="w-8 h-8 text-zinc-300" />
-          <span className="text-xs font-black tracking-wider text-zinc-400 bg-zinc-200/50 px-2 py-0.5 rounded">
-            {plate}
-          </span>
+          <Car className="w-8 h-8 text-zinc-600" />
         </div>
       )}
 
-      {/* Premium subtle layout touch: Overlay car plate label dynamically on every cell */}
+      {/* Solid label (no blur) for performance */}
       {url && (
-        <div className="absolute bottom-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1 rounded-lg border border-white/10">
+        <div className="absolute bottom-4 left-4 bg-zinc-900/90 px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
           <span className="text-white text-xs font-black tracking-widest uppercase">
             {plate}
           </span>
@@ -562,13 +518,11 @@ const CollageCell = memo(function CollageCell({
 
 // ─── Confirmed Overlay ─────────────────────────────────────────────────────────
 const ConfirmedOverlay = memo(function ConfirmedOverlay({
-  totalAmount,
-  onDone,
+  totalAmount, onDone,
 }: {
-  totalAmount: number
-  onDone: () => void
+  totalAmount: number; onDone: () => void
 }) {
-  const [countdown, setCountdown] = useState(Math.round(CONFIRMED_MS / 1000))
+  const [, setCountdown] = useState(Math.round(CONFIRMED_MS / 1000))
 
   useEffect(() => {
     const ticker = setInterval(() => {
@@ -582,48 +536,29 @@ const ConfirmedOverlay = memo(function ConfirmedOverlay({
   }, [onDone])
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-10"
-      style={{ background: 'rgba(255,255,255,0.98)' }}
-    >
+    <div className="w-full h-full flex flex-col items-center justify-center gap-8">
       <div
-        className="flex items-center justify-center"
+        className="flex items-center justify-center rounded-full"
         style={{
-          width: 120, height: 120, borderRadius: '50%',
-          background: 'rgba(16,185,129,0.08)',
-          border: '2px solid rgba(16,185,129,0.15)',
+          width: 100, height: 100,
+          background: 'rgba(16,185,129,0.1)',
         }}
       >
-        <CheckCircle2 className="text-emerald-400" style={{ width: 64, height: 64 }} />
+        <CheckCircle2 className="text-emerald-500" style={{ width: 50, height: 50 }} />
       </div>
 
       <div className="flex flex-col items-center gap-4 text-center">
-        <div
-          className="flex items-center gap-3 px-8 py-3"
-          style={{
-            background: 'rgba(16,185,129,0.08)',
-            border: '1px solid rgba(16,185,129,0.15)',
-            borderRadius: 100,
-          }}
-        >
-          <CheckCircle2 className="w-5 h-5 text-emerald-400" />
-          <span className="text-emerald-600 font-black text-lg uppercase tracking-widest">Transaksi Diterima</span>
-        </div>
-
+        <h2 className="text-emerald-600 font-black text-2xl uppercase tracking-widest">Transaksi Selesai</h2>
         <div
           className="text-zinc-900"
           style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 80, lineHeight: 1 }}
         >
           {fmt(totalAmount)}
         </div>
-
-        <p className="text-emerald-600 font-bold text-2xl">Terima kasih! Sila datang lagi 🚗</p>
-        <p className="text-zinc-500 font-bold text-sm uppercase tracking-widest">
-          Paparan akan dikosongkan dalam {countdown}s
-        </p>
+        <p className="text-zinc-500 font-bold mt-2 text-lg">Terima kasih! Sila datang lagi 🚗</p>
       </div>
 
-      <div className="w-64 h-1.5 bg-zinc-200 rounded-full overflow-hidden">
+      <div className="w-64 h-1.5 bg-zinc-100 rounded-full overflow-hidden mt-6">
         <div
           className="h-full bg-emerald-400 rounded-full countdown-bar"
           style={{ animationDuration: `${CONFIRMED_MS}ms` }}
@@ -633,19 +568,19 @@ const ConfirmedOverlay = memo(function ConfirmedOverlay({
   )
 })
 
-// ─── Helper sub-components — all memo'd ───────────────────────────────────────
+// ─── Helper sub-components ───────────────────────────────────────
 const InfoTile = memo(function InfoTile({
   label, value, accent,
 }: {
   label: string; value: string; accent?: string
 }) {
   return (
-    <div className="bg-zinc-50 rounded-2xl p-3 border border-zinc-200">
-      <span className="block text-zinc-600 text-xs font-black uppercase tracking-widest mb-1">{label}</span>
-      <div className="text-zinc-900 font-extrabold text-base flex items-center gap-1.5 truncate">
+    <div className="bg-zinc-50 rounded-2xl p-4 border border-zinc-100">
+      <span className="block text-zinc-400 text-xs font-black uppercase tracking-widest mb-1.5">{label}</span>
+      <div className="text-zinc-800 font-bold text-base flex items-center gap-2 truncate">
         {accent && (
           <div
-            className="w-2.5 h-2.5 rounded-full flex-shrink-0 border border-black/5"
+            className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm"
             style={{ background: accent }}
           />
         )}
@@ -661,7 +596,7 @@ const SectionHeader = memo(function SectionHeader({
   icon: React.ReactNode; label: string
 }) {
   return (
-    <div className="flex items-center gap-2 mt-4 mb-1">
+    <div className="flex items-center gap-3 mt-6 mb-2">
       <span className="text-zinc-400">{icon}</span>
       <span className="text-zinc-400 text-xs font-black uppercase tracking-widest">{label}</span>
       <div className="flex-1 h-px bg-zinc-100" />
@@ -670,26 +605,25 @@ const SectionHeader = memo(function SectionHeader({
 })
 
 const LineItem = memo(function LineItem({
-  label, sublabel, amount, accent, delay,
+  label, sublabel, amount, accent
 }: {
   label: string; sublabel?: string; amount: number; accent?: boolean; delay?: number
 }) {
   return (
     <div
-      className="flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-zinc-200"
-      style={{ transition: 'opacity 0.3s', transitionDelay: `${(delay || 0) * 80}ms` }}
+      className="flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-zinc-100 shadow-sm"
     >
       <div className="min-w-0 mr-4">
-        <span className="text-zinc-900 font-bold text-sm block truncate">{label}</span>
+        <span className="text-zinc-800 font-bold text-sm block truncate">{label}</span>
         {sublabel && (
-          <span className="text-zinc-500 text-xs font-bold mt-0.5 uppercase tracking-wider block">
+          <span className="text-zinc-400 text-xs font-bold mt-1 uppercase tracking-wider block">
             {sublabel}
           </span>
         )}
       </div>
       <div
         className="font-black text-lg flex-shrink-0 tabular-nums"
-        style={{ color: accent ? '#2563eb' : '#3f3f46' }}
+        style={{ color: accent ? '#3b82f6' : '#27272a' }}
       >
         {fmt(amount)}
       </div>
@@ -715,7 +649,6 @@ function CheckoutScreen({ state }: { state: KioskState }) {
 
   const activeServices = useMemo(
     () => Object.entries(primaryTx?.services || {}).filter(([, v]) => v).map(([k]) => k),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [primaryTx?.services]
   )
 
@@ -725,7 +658,6 @@ function CheckoutScreen({ state }: { state: KioskState }) {
     engine: { ...SERVICE_CONFIG.engine, label: t('intake.services.engine') },
   }), [t])
 
-  // ── Total change flash ──────────────────────────────────────────────────────
   const [prevTotal, setPrevTotal] = useState(totalAmount)
   const [totalChanged, setTotalChanged] = useState(false)
 
@@ -734,12 +666,11 @@ function CheckoutScreen({ state }: { state: KioskState }) {
     if (totalAmount !== prevTotal) {
       setTotalChanged(true)
       setPrevTotal(totalAmount)
-      timer = setTimeout(() => setTotalChanged(false), 600)
+      timer = setTimeout(() => setTotalChanged(false), 400)
     }
     return () => { if (timer) clearTimeout(timer) }
   }, [totalAmount, prevTotal])
 
-  // ── Popup phase state ───────────────────────────────────────────────────────
   const [popupPhase, setPopupPhase] = useState<PopupPhase>(null)
   const popupTimers = useRef<ReturnType<typeof setTimeout>[]>([])
 
@@ -757,9 +688,6 @@ function CheckoutScreen({ state }: { state: KioskState }) {
     } else if (stage === 'confirmed') {
       clearPopupTimers()
       setPopupPhase('confirmed')
-    } else if (stage === 'idle') {
-      clearPopupTimers()
-      setPopupPhase(null)
     } else {
       clearPopupTimers()
       setPopupPhase(null)
@@ -777,65 +705,56 @@ function CheckoutScreen({ state }: { state: KioskState }) {
 
   return (
     <div
-      className="w-full h-full flex flex-row bg-zinc-100 overflow-hidden"
+      className="w-full h-full flex flex-row bg-zinc-50 overflow-hidden"
       style={{ fontFamily: "var(--font-dm-sans, 'DM Sans', system-ui, sans-serif)" }}
     >
-      {/* ── LEFT PANEL ───────────────────────────────────────────────── */}
-      <div className="w-[35%] h-full flex flex-col border-r border-zinc-200 bg-zinc-50 overflow-hidden p-7">
-        <div className="w-full h-full flex flex-col justify-between">
-          <CarCollage
-            transactions={transactions}
-            fallbackColor={carColor}
-          />
-        </div>
+      {/* ── LEFT PANEL (Always visible!) ───────────────────────────────── */}
+      <div className="w-[45%] max-w-[600px] h-full flex flex-col p-6 bg-zinc-100 border-r border-zinc-200">
+        <CarCollage transactions={transactions} fallbackColor={carColor} />
       </div>
 
-      {/* ── RIGHT PANEL ──────────────────────────────────────────────── */}
-      <div className="flex-1 h-full flex flex-col bg-white overflow-hidden">
-
+      {/* ── RIGHT PANEL (Contains the receipt and overlays) ────────────── */}
+      <div className="flex-1 h-full flex flex-col relative bg-white overflow-hidden shadow-[-10px_0_30px_rgba(0,0,0,0.03)] z-10">
+        
         {/* Header */}
-        <div className="px-8 py-5 flex items-center gap-5 border-b border-zinc-200 bg-zinc-50">
+        <div className="px-8 py-6 flex items-center gap-5 border-b border-zinc-100 bg-white z-20">
           <div
-            className="w-12 h-12 flex items-center justify-center flex-shrink-0"
-            style={{ borderRadius: 14, background: 'linear-gradient(135deg,#2563eb,#7c3aed)' }}
+            className="w-14 h-14 flex items-center justify-center flex-shrink-0 rounded-2xl shadow-sm"
+            style={{ background: 'linear-gradient(135deg, #18181b, #3f3f46)' }}
           >
-            <Car className="w-6 h-6 text-white" />
+            <Car className="w-7 h-7 text-white" />
           </div>
           <div className="flex-1 min-w-0">
             <div
-              className="text-zinc-900 leading-none mb-1 truncate"
-              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 46, letterSpacing: 3 }}
+              className="text-zinc-900 leading-none mb-2 truncate"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 46, letterSpacing: 2 }}
             >
               {isMulti
                 ? transactions.map(tx => tx.plateNumber).join(' · ')
                 : primaryTx?.plateNumber}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <span className="text-zinc-500 text-xs font-bold uppercase tracking-wider">
                 {!isMulti
                   ? `${primaryTx?.brand} ${primaryTx?.model}`
                   : `${transactions.length} ${t('payment.batch')}`}
               </span>
-              <span className="w-1 h-1 rounded-full bg-zinc-600 inline-block" />
-              <span className="flex items-center gap-1 text-emerald-400 text-xs font-black uppercase tracking-wider">
-                <span className="live-dot w-2 h-2 rounded-full bg-emerald-400 inline-block" />
+              <span className="w-1 h-1 rounded-full bg-zinc-300 inline-block" />
+              <span className="flex items-center gap-1.5 text-emerald-500 text-xs font-black uppercase tracking-wider">
+                <span className="live-dot w-2 h-2 rounded-full bg-emerald-500 inline-block" />
                 Live
               </span>
             </div>
           </div>
         </div>
 
-        {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 flex flex-col gap-3">
+        {/* Scrollable Receipt Area */}
+        <div className="flex-1 overflow-y-auto px-8 py-6 flex flex-col gap-2 relative">
           {!isMulti && primaryTx && (
-            <div className="grid grid-cols-4 gap-2 mb-2">
+            <div className="grid grid-cols-2 gap-3 mb-4">
               <InfoTile label={t('priceBook.brand')} value={primaryTx.brand || '—'} />
               <InfoTile label={t('priceBook.model')} value={primaryTx.model || '—'} />
-              <InfoTile
-                label={t('intake.color')}
-                value={t(`color.${primaryTx.color}` as any) || '—'}
-                accent={carColor}
-              />
+              <InfoTile label={t('intake.color')} value={t(`color.${primaryTx.color}` as any) || '—'} accent={carColor} />
               <InfoTile label={t('staff.checkIn')} value={formatTime(primaryTx.checkInTime)} />
             </div>
           )}
@@ -848,10 +767,10 @@ function CheckoutScreen({ state }: { state: KioskState }) {
                 return (
                   <div
                     key={svc}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border"
-                    style={{ color: s.color, borderColor: s.color + '44', background: s.color + '11' }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black border bg-white shadow-sm"
+                    style={{ color: s.color, borderColor: s.color + '33' }}
                   >
-                    <span className="flex">{s.icon}</span>{s.label}
+                    {s.icon}{s.label}
                   </div>
                 )
               })}
@@ -862,9 +781,7 @@ function CheckoutScreen({ state }: { state: KioskState }) {
           {transactions.map(tx => (
             <LineItem
               key={tx.id}
-              label={`${tx.brand} ${tx.model} – ${activeServices.map(s => SERVICE_LABELS[s as keyof typeof SERVICE_LABELS]?.label).join(', ')
-                || t('intake.services')
-                }`}
+              label={`${tx.brand} ${tx.model} – ${activeServices.map(s => SERVICE_LABELS[s as keyof typeof SERVICE_LABELS]?.label).join(', ') || t('intake.services')}`}
               sublabel={isMulti ? tx.plateNumber : undefined}
               amount={tx.computedPrice}
             />
@@ -874,14 +791,7 @@ function CheckoutScreen({ state }: { state: KioskState }) {
             <>
               <SectionHeader icon={<Package className="w-4 h-4" />} label={t('cashier.retailAddons')} />
               {selectedAddons.map((a, i) => (
-                <LineItem
-                  key={a.id}
-                  label={a.name}
-                  sublabel={a.quantity > 1 ? `x${a.quantity}` : undefined}
-                  amount={a.price * a.quantity}
-                  accent
-                  delay={i}
-                />
+                <LineItem key={a.id} label={a.name} sublabel={a.quantity > 1 ? `x${a.quantity}` : undefined} amount={a.price * a.quantity} accent delay={i} />
               ))}
             </>
           )}
@@ -894,74 +804,62 @@ function CheckoutScreen({ state }: { state: KioskState }) {
               ))}
             </>
           )}
-
-          <div className="h-4 flex-shrink-0" />
+          <div className="h-6 flex-shrink-0" />
         </div>
 
-        {/* Pinned Grand Total */}
+        {/* Grand Total Footer */}
         <div
-          className="px-8 py-6 border-t border-zinc-200 bg-zinc-50"
+          className="px-8 py-6 border-t border-zinc-100 bg-white z-20 shadow-[0_-10px_20px_rgba(0,0,0,0.02)]"
           style={{
-            transition: 'transform 0.3s, opacity 0.3s',
-            transform: totalChanged ? 'scale(1.02)' : 'scale(1)',
-            opacity: totalChanged ? 0.95 : 1,
+            transition: 'transform 0.2s ease',
+            transform: totalChanged ? 'scale(1.01)' : 'scale(1)',
           }}
         >
           <div className="flex items-center justify-between">
             <div>
-              <span className="block text-zinc-600 text-xs font-black uppercase tracking-widest mb-1">
+              <span className="block text-zinc-400 text-xs font-black uppercase tracking-widest mb-1.5">
                 {t('payment.totalAmount')}
               </span>
-              <p className="text-zinc-500 text-sm font-bold">
-                {t('payment.totalCars')} {transactions.length}
-                {selectedAddons.length > 0 ? ` + ${selectedAddons.length} item` : ''}
+              <p className="text-zinc-600 text-sm font-bold">
+                {transactions.length} Kenderaan
+                {selectedAddons.length > 0 ? ` + ${selectedAddons.length} Item` : ''}
               </p>
             </div>
             <div
               className="text-zinc-900"
-              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 68 }}
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 64 }}
             >
               {fmt(totalAmount)}
             </div>
           </div>
         </div>
 
-        {/* Footer clock — isolated component, no parent re-renders for ticks */}
         {mounted && <FooterClock />}
+
+        {/* ── PAYMENT POPUP & CONFIRMED OVERLAY (Scoped to Right Panel!) ─── */}
+        {((showPaymentPopup || showPaymentPopupConfirming) && paymentMethod) && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm">
+            <PaymentPopup
+              paymentMethod={paymentMethod} totalAmount={totalAmount}
+              cashReceived={cashReceived} balance={balance} phase={popupPhase}
+            />
+          </div>
+        )}
+
+        {showConfirmedOverlay && (
+          <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm">
+             <ConfirmedOverlay totalAmount={totalAmount} onDone={handleConfirmedDone} />
+          </div>
+        )}
       </div>
 
-      {/* ── PAYMENT POPUP ───────────────────────────────────────────── */}
-      {(showPaymentPopup || showPaymentPopupConfirming) && paymentMethod && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          style={{ background: 'rgba(255,255,255,0.9)' }}
-        >
-          <PaymentPopup
-            paymentMethod={paymentMethod}
-            totalAmount={totalAmount}
-            cashReceived={cashReceived}
-            balance={balance}
-            phase={popupPhase}
-          />
-        </div>
-      )}
-
-      {/* ── CONFIRMED OVERLAY ────────────────────────────────────────── */}
-      {showConfirmedOverlay && (
-        <ConfirmedOverlay totalAmount={totalAmount} onDone={handleConfirmedDone} />
-      )}
-
-      {/* Shared CSS — no @import, fonts come from next/font in layout.tsx */}
       <style>{`
         .live-dot   { animation: livePulse 2s ease-in-out infinite; }
         @keyframes livePulse { 0%,100%{opacity:0.5} 50%{opacity:1} }
-
         .spin-icon  { display:inline-flex; animation: spin 1s linear infinite; }
         @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
-
         .countdown-bar { animation: shrink linear forwards; }
         @keyframes shrink { from{width:100%} to{width:0%} }
-
         ::-webkit-scrollbar       { width: 6px; }
         ::-webkit-scrollbar-track { background: rgba(0,0,0,0.02); }
         ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.1); border-radius: 4px; }
@@ -970,11 +868,10 @@ function CheckoutScreen({ state }: { state: KioskState }) {
   )
 }
 
-// ─── Main Export ──────────────────────────────────────────────────────────────
 export default function KioskDisplay() {
   const state = useKioskState()
   return (
-    <div className={`${bebasNeue.variable} ${dmSans.variable} w-screen h-screen overflow-hidden bg-zinc-100`}>
+    <div className={`${bebasNeue.variable} ${dmSans.variable} w-screen h-screen overflow-hidden bg-zinc-50`}>
       {state.stage === 'idle' || state.transactions.length === 0
         ? <IdleScreen />
         : <CheckoutScreen state={state} />}
