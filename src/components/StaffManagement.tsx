@@ -204,10 +204,9 @@ export default function StaffManagement() {
     }
   }
 
-  // Staff already clocked in today (no clockOutTime yet) shouldn't be checked in again
-  const activeStaffIds = new Set(
-    rows.filter((r) => !r.clockOutTime).map((r) => r.staffId)
-  )
+  // Staff with ANY attendance record today (active or already clocked out)
+  // should not appear as eligible for check-in — prevents duplicate daily_salaries writes
+  const clockedInTodayIds = new Set(rows.map((r) => r.staffId))
 
   function openCheckInModal() {
     setSelectedStaffId(null)
@@ -246,8 +245,8 @@ export default function StaffManagement() {
       showToast.error(t('staff.photoRequired' as any) || 'Please attach a photo before submitting')
       return
     }
-    if (activeStaffIds.has(selectedStaffId)) {
-      showToast.error(t('staff.alreadyClockedIn' as any) || 'This staff is already clocked in today')
+    if (clockedInTodayIds.has(selectedStaffId)) {
+      showToast.error(t('staff.alreadyClockedIn' as any) || 'This staff already has an attendance record today')
       return
     }
 
@@ -263,6 +262,12 @@ export default function StaffManagement() {
       setSubmitting(false)
     }
   }
+
+  // Staff eligible to appear in the check-in picker: active status only,
+  // and no attendance record (active or completed) for today
+  const eligibleStaffForCheckIn = Object.values(staffMap).filter(
+    (s: any) => s.status !== 'inactive' && !clockedInTodayIds.has(s.id)
+  )
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -513,26 +518,25 @@ export default function StaffManagement() {
                   {t('staff.name' as any) || 'Staff'}
                 </label>
                 <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
-                  {Object.values(staffMap).length === 0 && (
-                    <div className="text-sm text-zinc-400 font-medium py-4 text-center">No staff found.</div>
+                  {eligibleStaffForCheckIn.length === 0 && (
+                    <div className="text-sm text-zinc-400 font-medium py-4 text-center">
+                      {t('staff.noEligibleStaff' as any) || 'No staff available to check in'}
+                    </div>
                   )}
-                  {Object.values(staffMap).map((s: any) => {
-                    const isActive = activeStaffIds.has(s.id)
+                  {eligibleStaffForCheckIn.map((s: any) => {
                     const isSelected = selectedStaffId === s.id
                     return (
                       <button
                         key={s.id}
-                        disabled={isActive}
                         onClick={() => setSelectedStaffId(s.id)}
-                        className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-colors text-left ${isActive
-                          ? 'border-zinc-100 dark:border-zinc-800 opacity-40 cursor-not-allowed'
-                          : isSelected
+                        className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-colors text-left ${
+                          isSelected
                             ? 'border-blue-600 bg-blue-500/5'
                             : 'border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
-                          }`}
+                        }`}
                       >
-                        {s.imageUrl ? (
-                          <img src={s.imageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                        {s.profileImage ? (
+                          <img src={s.profileImage} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
                         ) : (
                           <div className="w-9 h-9 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center shrink-0">
                             <Users className="w-4 h-4 text-zinc-400" />
@@ -541,11 +545,6 @@ export default function StaffManagement() {
                         <span className="font-bold text-zinc-900 dark:text-white truncate flex-1">
                           {s.name || s.displayName}
                         </span>
-                        {isActive && (
-                          <span className="text-[9px] text-amber-600 dark:text-amber-400 font-black uppercase bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
-                            Active
-                          </span>
-                        )}
                       </button>
                     )
                   })}
