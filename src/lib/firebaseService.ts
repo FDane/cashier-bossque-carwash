@@ -10,6 +10,7 @@ import {
   query,
   where,
   getDocs,
+  Timestamp,
   onSnapshot,
   Unsubscribe,
   deleteDoc,
@@ -19,8 +20,8 @@ import {
   endBefore,
   limitToLast,
 } from 'firebase/firestore'
-import { db } from './firebase'
-import { getStorage, ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
+import { db, storage } from './firebase'
+import { ref as storageRef,ref, StorageReference, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage'
 import {
   Transaction,
   TransactionStatus,
@@ -30,12 +31,191 @@ import {
 } from '@/types'
 import { getKLDateString } from './utils'
 
+const MY_TIMEZONE = 'Asia/Kuala_Lumpur' // UTC+8
 const TRANSACTIONS_COLLECTION = 'transactions'
 const DAILY_STATS_COLLECTION = 'daily_stats'
 const PRICE_BOOK_COLLECTION = 'price_book'
 const CASH_ADJUSTMENTS_COLLECTION = 'cash_adjustments'
 const DAILY_SALARIES_COLLECTION = 'daily_salaries'
-const storage = getStorage()
+
+// Same logic as StaffManagement.tsx — keep these in sync
+function getMalaysiaDateString(d: Date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: MY_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+function setMYHour(date: Date, hour: number, minute: number) {
+  // Builds a Date representing hour:minute *in Malaysia time* on the same calendar day as `date`
+  const dateStr = getMalaysiaDateString(date)
+  // ISO with explicit +08:00 offset avoids any reliance on server/browser local timezone
+  return new Date(`${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00+08:00`)
+}
+
+async function calculateDailyEarningsForStaff(
+  staffData: any, // the staff record from staffMap (needs dailySalary, salaryTiers)
+  staffId: string,
+  dateStr: string,
+  clockInTime: Date,
+  clockOutTime?: Date | null,
+) {
+  let baseSalary = Number(staffData?.dailySalary) || 0
+  let penalty = 0
+  let bonus = 0
+  let advancesDeducted = 0
+  let carCount = 0
+
+  // Car count from daily_stats
+  const statsSnap = await getDocs(query(collection(db, 'daily_stats'), where('date', '==', dateStr)))
+  if (!statsSnap.empty) {
+    carCount = statsSnap.docs[0].data().totalCars || 0
+  }
+
+  // Salary tiers
+  if (staffData?.salaryTiers && typeof staffData.salaryTiers === 'object') {
+    let tieredSalary: number | undefined
+    if (Array.isArray(staffData.salaryTiers)) {
+      const index = Math.floor(carCount / 10)
+      const tierIndex = Math.max(0, Math.min(index, staffData.salaryTiers.length - 1))
+      tieredSalary = staffData.salaryTiers[tierIndex]
+    } else {
+      const tierNumber = Math.min(Math.floor(carCount / 10) + 1, 5)
+      tieredSalary = staffData.salaryTiers[`t${tierNumber}`]
+    }
+    if (tieredSalary !== undefined && tieredSalary !== null) {
+      baseSalary = Number(tieredSalary)
+    }
+  }
+
+  // Advances
+  const advancesSnap = await getDocs(query(
+    collection(db, 'advances'),
+    where('staffId', '==', staffId),
+    where('date', '==', dateStr)
+  ))
+  advancesDeducted = advancesSnap.docs.reduce((sum, d) => sum + (d.data().amount || 0), 0)
+
+  // Lateness — 9:00 AM MY time, 10 min grace
+  const workStart = setMYHour(clockInTime, 9, 0)
+  const minutesLate = Math.floor((clockInTime.getTime() - workStart.getTime()) / 60000)
+  if (minutesLate >= 10) {
+    penalty = Math.floor(minutesLate / 10) * 0.5
+  }
+
+  if (clockOutTime) {
+    const workEnd = setMYHour(clockOutTime, 18, 0)
+    const otStart = setMYHour(clockOutTime, 18, 30)
+
+    if (clockOutTime < workEnd) {
+      const minutesEarly = Math.floor((workEnd.getTime() - clockOutTime.getTime()) / 60000)
+      penalty += Math.floor(minutesEarly / 10) * 0.5
+    } else if (clockOutTime >= otStart) {
+      const minutesOT = Math.floor((clockOutTime.getTime() - otStart.getTime()) / 60000)
+      bonus = Math.floor(minutesOT / 10) * 0.5
+    }
+
+    const actualWorkMinutes = Math.floor((clockOutTime.getTime() - clockInTime.getTime()) / 60000)
+    if (actualWorkMinutes < 180) {
+      penalty += 10.0
+    }
+  }
+
+  const totalEarnings = Math.max(0, baseSalary - penalty + bonus - advancesDeducted)
+
+  const result: any = {
+    staffId,
+    date: dateStr,
+    baseSalary,
+    carCount,
+    penalty,
+    bonus,
+    advancesDeducted,
+    totalEarnings,
+    clockInTime: Timestamp.fromDate(clockInTime),
+    lastUpdatedAt: Timestamp.now(),
+  }
+  if (clockOutTime) result.clockOutTime = Timestamp.fromDate(clockOutTime)
+  return result
+}
+
+async function notifyAdminWhatsApp(action: 'Clock In' | 'Clock Out', staffName: string, time: Date) {
+  const timeStr = time.toLocaleString('en-MY', {
+    timeZone: MY_TIMEZONE,
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
+  })
+  const messageText = `🚗 *Carwash Bossque*\n\nNotifikasi Kehadiran (Admin):\n👤 Staff: *${staffName}*\n📝 Status: *${action}*\n⏰ Masa: *${timeStr}*`
+  try {
+    await fetch('/api/send-whatsapp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: messageText }),
+    })
+  } catch (error) {
+    console.error('Failed to trigger WhatsApp notification:', error)
+  }
+}
+
+/**
+ * Admin-initiated manual clock-in. Mirrors the self-service handleClockIn flow
+ * (attendance + daily_salaries records, same storage path convention) but uses
+ * an explicit UTC+8 date instead of relying on the browser's local timezone.
+ */
+export async function manualClockIn(staffId: string, staffData: any, imageFile: File | null) {
+  const today = getMalaysiaDateString()
+  const clockInTimestamp = Timestamp.now()
+  const dailySalaryId = `${staffId}_${today}`
+
+  let imageUrl = ''
+  let uploadedImageRef: StorageReference | null = null
+
+  try {
+    if (imageFile) {
+      const imageRef = ref(storage, `attendance/${today}_${staffId}.jpg`)
+      await uploadBytes(imageRef, imageFile)
+      uploadedImageRef = imageRef
+      imageUrl = await getDownloadURL(imageRef)
+    }
+
+    const initialDailySalaryData = await calculateDailyEarningsForStaff(
+      staffData,
+      staffId,
+      today,
+      clockInTimestamp.toDate(),
+      null
+    )
+
+    await setDoc(doc(db, 'daily_salaries', dailySalaryId), {
+      ...initialDailySalaryData,
+      id: dailySalaryId,
+    })
+
+    const docRef = await addDoc(collection(db, 'attendance'), {
+      staffId,
+      date: today,
+      clockInTime: clockInTimestamp,
+      imageUrl,
+      createdAt: Timestamp.now(),
+      clockedInBy: 'admin', // distinguishes admin-initiated entries from self check-ins
+    })
+
+    notifyAdminWhatsApp('Clock In', staffData?.name || staffData?.displayName || staffId, clockInTimestamp.toDate())
+
+    return docRef.id
+  } catch (error) {
+    if (uploadedImageRef) {
+      try {
+        await deleteObject(uploadedImageRef)
+      } catch (deleteError) {
+        console.error('Failed to delete orphaned image from storage:', deleteError)
+      }
+    }
+    throw error
+  }
+}
 
 function normalizeStorageFileName(value: string) {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, '_')

@@ -8,11 +8,14 @@ import {
   CheckCircle2,
   ImageIcon,
   X,
+  UserPlus,
+  Camera,
 } from 'lucide-react'
 import {
   listenToTodayAttendance,
   getStaffList,
   clockOutAttendance,
+  manualClockIn,
 } from '@/lib/firebaseService'
 import { doc, getDoc } from 'firebase/firestore'
 import { db } from '@/lib/firebase'
@@ -30,6 +33,27 @@ interface AttendanceRow {
   imagePath?: string
 }
 
+const MY_TIMEZONE = 'Asia/Kuala_Lumpur' // UTC+8
+
+// Returns today's date as YYYY-MM-DD in Malaysia time (UTC+8), not the server/browser's local time
+function getMalaysiaDateString(d: Date = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: MY_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(d)
+}
+
+// Formats a Date as HH:mm in Malaysia time (UTC+8)
+function formatMYTime(d: Date) {
+  return d.toLocaleTimeString('en-MY', {
+    timeZone: MY_TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export default function StaffManagement() {
   const { t } = useLanguage()
   const [rows, setRows] = useState<AttendanceRow[]>([])
@@ -37,6 +61,13 @@ export default function StaffManagement() {
   const [selected, setSelected] = useState<Record<string, boolean>>({})
   const [selectAll, setSelectAll] = useState(false)
   const [viewingImageUrl, setViewingImageUrl] = useState<string | null>(null)
+
+  // Check-in modal state
+  const [showCheckInModal, setShowCheckInModal] = useState(false)
+  const [selectedStaffId, setSelectedStaffId] = useState<string | null>(null)
+  const [checkInImage, setCheckInImage] = useState<File | null>(null)
+  const [checkInPreview, setCheckInPreview] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     let unsub: (() => void) | undefined
@@ -61,9 +92,11 @@ export default function StaffManagement() {
         });
 
         setRows(sortedData)
-        const sel: Record<string, boolean> = {}
-        sortedData.forEach((r: any) => (sel[r.id] = false))
-        setSelected(sel)
+        setSelected((prev) => {
+          const sel: Record<string, boolean> = {}
+          sortedData.forEach((r: any) => (sel[r.id] = prev[r.id] || false))
+          return sel
+        })
       })
 
       if (typeof cleanup === 'function') {
@@ -85,9 +118,9 @@ export default function StaffManagement() {
     setSelectAll(all)
   }, [selected, rows])
 
-  // Prevent background scrolling when modal is open
+  // Prevent background scrolling when any modal is open
   useEffect(() => {
-    if (viewingImageUrl) {
+    if (viewingImageUrl || showCheckInModal) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
@@ -95,7 +128,7 @@ export default function StaffManagement() {
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [viewingImageUrl])
+  }, [viewingImageUrl, showCheckInModal])
 
   function toggleSelect(id: string) {
     setSelected((s) => ({ ...s, [id]: !s[id] }))
@@ -120,11 +153,10 @@ export default function StaffManagement() {
         // 1. Process the clock out in Firebase
         await Promise.all(selectedIds.map(id => clockOutAttendance(id)))
 
-        // 2. Fetch the 'totalCars' from today's 'daily_stats' document
+        // 2. Fetch the 'totalCars' from today's 'daily_stats' document (UTC+8 date)
         let totalCars = 0;
         try {
-          // Adjust this date format if your document IDs use a different pattern (e.g., DD-MM-YYYY)
-          const todayId = new Date().toISOString().split('T')[0];
+          const todayId = getMalaysiaDateString();
           const statsSnap = await getDoc(doc(db, 'daily_stats', todayId));
 
           if (statsSnap.exists()) {
@@ -134,11 +166,13 @@ export default function StaffManagement() {
           console.error("Failed to fetch daily_stats for WhatsApp notification:", statsErr);
         }
 
-        // 3. Prepare the WhatsApp Notification
+        // 3. Prepare the WhatsApp Notification (Malaysia time)
         const now = new Date();
         const timeStr = now.toLocaleDateString('ms-MY', {
+          timeZone: MY_TIMEZONE,
           day: '2-digit', month: 'short', year: 'numeric'
         }) + ', ' + now.toLocaleTimeString('ms-MY', {
+          timeZone: MY_TIMEZONE,
           hour: '2-digit', minute: '2-digit', hour12: true
         });
 
@@ -170,6 +204,66 @@ export default function StaffManagement() {
     }
   }
 
+  // Staff already clocked in today (no clockOutTime yet) shouldn't be checked in again
+  const activeStaffIds = new Set(
+    rows.filter((r) => !r.clockOutTime).map((r) => r.staffId)
+  )
+
+  function openCheckInModal() {
+    setSelectedStaffId(null)
+    setCheckInImage(null)
+    setCheckInPreview(null)
+    setShowCheckInModal(true)
+  }
+
+  function closeCheckInModal() {
+    setShowCheckInModal(false)
+    setSelectedStaffId(null)
+    setCheckInImage(null)
+    if (checkInPreview) URL.revokeObjectURL(checkInPreview)
+    setCheckInPreview(null)
+  }
+
+  function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setCheckInImage(file)
+    setCheckInPreview(URL.createObjectURL(file))
+  }
+
+  function handleRemoveImage() {
+    if (checkInPreview) URL.revokeObjectURL(checkInPreview)
+    setCheckInImage(null)
+    setCheckInPreview(null)
+  }
+
+  async function handleSubmitCheckIn() {
+    if (!selectedStaffId) {
+      showToast.error(t('staff.selectStaffFirst' as any) || 'Select a staff member first')
+      return
+    }
+    if (!checkInImage) {
+      showToast.error(t('staff.photoRequired' as any) || 'Please attach a photo before submitting')
+      return
+    }
+    if (activeStaffIds.has(selectedStaffId)) {
+      showToast.error(t('staff.alreadyClockedIn' as any) || 'This staff is already clocked in today')
+      return
+    }
+
+    setSubmitting(true)
+    try {
+      await manualClockIn(selectedStaffId, staffMap[selectedStaffId], checkInImage)
+      showToast.success(t('staff.clockInSuccess' as any) || 'Staff checked in')
+      closeCheckInModal()
+    } catch (err) {
+      console.error('Manual clock-in error:', err)
+      showToast.error(t('staff.clockInError' as any) || 'Failed to check in staff')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       {/* Header */}
@@ -183,25 +277,35 @@ export default function StaffManagement() {
           </h2>
         </div>
 
-        <div className="flex items-center justify-between sm:justify-start gap-3 bg-white dark:bg-zinc-900 p-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm w-full sm:w-auto">
-          <label className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-colors">
-            <input
-              type="checkbox"
-              checked={selectAll}
-              onChange={handleSelectAll}
-              className="w-5 h-5 rounded-md accent-blue-600 cursor-pointer"
-            />
-            <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
-              {t('staff.selectAll' as any)}
-            </span>
-          </label>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           <button
-            className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-500/20 transition-all active:scale-95"
-            onClick={handleClockOutSelected}
+            className="flex items-center justify-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-bold rounded-2xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+            onClick={openCheckInModal}
           >
-            <LogOut className="w-4 h-4" />
-            {t('staff.clockOutSelected' as any)}
+            <UserPlus className="w-4 h-4" />
+            {t('staff.checkInTitle' as any) || 'Check In'}
           </button>
+
+          <div className="flex items-center justify-between sm:justify-start gap-3 bg-white dark:bg-zinc-900 p-2 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm w-full sm:w-auto">
+            <label className="flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 rounded-xl transition-colors">
+              <input
+                type="checkbox"
+                checked={selectAll}
+                onChange={handleSelectAll}
+                className="w-5 h-5 rounded-md accent-blue-600 cursor-pointer"
+              />
+              <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
+                {t('staff.selectAll' as any)}
+              </span>
+            </label>
+            <button
+              className="flex items-center gap-2 px-5 py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-xl shadow-lg shadow-red-500/20 transition-all active:scale-95"
+              onClick={handleClockOutSelected}
+            >
+              <LogOut className="w-4 h-4" />
+              {t('staff.clockOutSelected' as any)}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -257,7 +361,7 @@ export default function StaffManagement() {
                     <div className="text-[10px] font-black text-zinc-400 uppercase tracking-tighter mb-1">{t('staff.checkIn' as any)}</div>
                     <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-700 dark:text-zinc-300 font-mono">
                       <Clock className="w-3 h-3 text-blue-500" />
-                      {r.clockInTime?.toDate ? r.clockInTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--:--'}
+                      {r.clockInTime?.toDate ? formatMYTime(r.clockInTime.toDate()) : '--:--'}
                     </div>
                   </div>
                   <div className="p-2.5 bg-zinc-50 dark:bg-zinc-800/50 rounded-xl border border-zinc-100 dark:border-zinc-800">
@@ -266,7 +370,7 @@ export default function StaffManagement() {
                       {r.clockOutTime ? (
                         <>
                           <CheckCircle2 className="w-3 h-3 text-green-500" />
-                          {r.clockOutTime.toDate ? r.clockOutTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+                          {r.clockOutTime.toDate ? formatMYTime(r.clockOutTime.toDate()) : '...'}
                         </>
                       ) : (
                         <span className="text-[9px] text-amber-600 dark:text-amber-400 font-black uppercase bg-amber-500/10 px-1.5 py-0.5 rounded">Active</span>
@@ -340,7 +444,7 @@ export default function StaffManagement() {
                     <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-mono">
                       <Clock className="w-3.5 h-3.5 text-blue-500" />
                       {r.clockInTime?.toDate
-                        ? r.clockInTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                        ? formatMYTime(r.clockInTime.toDate())
                         : (r.clockInTime ? 'Loading...' : '--:--')}
                     </div>
                   </td>
@@ -349,7 +453,7 @@ export default function StaffManagement() {
                       <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400 font-mono">
                         <CheckCircle2 className="w-3.5 h-3.5 text-green-500" />
                         {r.clockOutTime.toDate
-                          ? r.clockOutTime.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          ? formatMYTime(r.clockOutTime.toDate())
                           : '...'}
                       </div>
                     ) : (
@@ -378,6 +482,115 @@ export default function StaffManagement() {
             </div>
             <div className="p-4">
               <img src={viewingImageUrl} alt="Staff Clock-in" className="w-full h-auto rounded-xl shadow-lg" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Check-In Modal */}
+      {showCheckInModal && (
+        <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4" onClick={closeCheckInModal}>
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center shrink-0">
+              <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
+                {t('staff.checkInTitle' as any) || 'Check In Staff'}
+              </h3>
+              <button
+                onClick={closeCheckInModal}
+                className="p-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 overflow-y-auto">
+              {/* Staff select */}
+              <div>
+                <label className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-2 block">
+                  {t('staff.name' as any) || 'Staff'}
+                </label>
+                <div className="max-h-56 overflow-y-auto space-y-2 pr-1">
+                  {Object.values(staffMap).length === 0 && (
+                    <div className="text-sm text-zinc-400 font-medium py-4 text-center">No staff found.</div>
+                  )}
+                  {Object.values(staffMap).map((s: any) => {
+                    const isActive = activeStaffIds.has(s.id)
+                    const isSelected = selectedStaffId === s.id
+                    return (
+                      <button
+                        key={s.id}
+                        disabled={isActive}
+                        onClick={() => setSelectedStaffId(s.id)}
+                        className={`w-full flex items-center gap-3 p-3 rounded-2xl border-2 transition-colors text-left ${isActive
+                          ? 'border-zinc-100 dark:border-zinc-800 opacity-40 cursor-not-allowed'
+                          : isSelected
+                            ? 'border-blue-600 bg-blue-500/5'
+                            : 'border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                          }`}
+                      >
+                        {s.imageUrl ? (
+                          <img src={s.imageUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <div className="w-9 h-9 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center shrink-0">
+                            <Users className="w-4 h-4 text-zinc-400" />
+                          </div>
+                        )}
+                        <span className="font-bold text-zinc-900 dark:text-white truncate flex-1">
+                          {s.name || s.displayName}
+                        </span>
+                        {isActive && (
+                          <span className="text-[9px] text-amber-600 dark:text-amber-400 font-black uppercase bg-amber-500/10 px-1.5 py-0.5 rounded shrink-0">
+                            Active
+                          </span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              {/* Image upload */}
+              <div>
+                <label className="text-xs font-black text-zinc-400 uppercase tracking-widest mb-2 block">
+                  {t('staff.photo' as any) || 'Photo'} <span className="text-red-500">*</span>
+                </label>
+                {checkInPreview ? (
+                  <div className="relative">
+                    <img src={checkInPreview} alt="" className="w-full h-40 object-cover rounded-2xl" />
+                    <button
+                      onClick={handleRemoveImage}
+                      className="absolute top-2 right-2 p-1.5 bg-black/60 hover:bg-black/80 rounded-full text-white transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <label className="flex flex-col items-center justify-center gap-2 h-32 rounded-2xl border-2 border-dashed border-zinc-200 dark:border-zinc-700 cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors">
+                    <Camera className="w-6 h-6 text-zinc-400" />
+                    <span className="text-xs font-bold text-zinc-400">
+                      {t('staff.tapToUpload' as any) || 'Tap to upload photo'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      onChange={handleImageSelect}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
+
+              <button
+                onClick={handleSubmitCheckIn}
+                disabled={!selectedStaffId || !checkInImage || submitting}
+                className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+              >
+                {submitting ? (t('staff.submitting' as any) || 'Submitting...') : (t('staff.submitCheckIn' as any) || 'Submit Check-In')}
+              </button>
             </div>
           </div>
         </div>
