@@ -52,6 +52,14 @@ const SERVICE_CATEGORIES = {
   engine: { ms: 'Enjin', en: 'Engine' },
 }
 
+/** Returns the promo price for a service if the vehicle has an active promotion
+ *  and a promo price was set for that service; otherwise falls back to the normal price. */
+function getServicePrice(item: any, normalKey: string, promoKey: string): number {
+  if (!item) return 0
+  if (item.promo_active && item[promoKey] > 0) return item[promoKey]
+  return item[normalKey] || 0
+}
+
 const CAR_COLORS = [
   'Black',
   'White',
@@ -420,6 +428,39 @@ export default function CashierCheckout({
     if (!exterior && !interior && !engine) return 0
 
     if (interior && !exterior && !engine) {
+      return getServicePrice(selectedModelData, 'vaccuum_price', 'promo_vaccuum_price')
+    }
+
+    let total = 0
+    if (exterior && interior) {
+      total = getServicePrice(selectedModelData, 'interior_price', 'promo_interior_price')
+    } else if (exterior && !interior) {
+      total = getServicePrice(selectedModelData, 'exterior_price', 'promo_exterior_price')
+    } else if (!exterior && interior) {
+      total = getServicePrice(selectedModelData, 'vaccuum_price', 'promo_vaccuum_price')
+    }
+
+    if (engine) {
+      total += getServicePrice(selectedModelData, 'engine_price', 'promo_engine_price')
+    }
+
+    return total
+  }
+
+  /** Same shape as calculatePrice, but always the normal (non-promo) price —
+   *  used to show customers the "before" price on the kiosk when a promo is active. */
+  const calculateNormalPrice = (brand: string, model: string, services: any) => {
+    const selectedModelData = priceBook.find(
+      it => it.brand === brand && it.model === model
+    )
+
+    if (!selectedModelData) return 0
+
+    const { exterior, interior, engine } = services
+
+    if (!exterior && !interior && !engine) return 0
+
+    if (interior && !exterior && !engine) {
       return selectedModelData.vaccuum_price || 0
     }
 
@@ -645,17 +686,23 @@ export default function CashierCheckout({
       stage: checkoutModal.paymentMethod ? 'payment'
         : checkoutModal.selectedAddons.length ? 'addons'
           : 'selecting',
-      transactions: checkoutModal.transactions.map(t => ({
-        id: t.id,
-        plateNumber: t.plateNumber,
-        brand: t.brand,
-        model: t.model,
-        color: t.color,
-        services: t.services,
-        computedPrice: t.computedPrice,
-        imageUrl: t.imageUrl,
-        checkInTime: t.checkInTime instanceof Date ? t.checkInTime : new Date(t.checkInTime).toISOString()
-      })),
+      transactions: checkoutModal.transactions.map(t => {
+        const originalPrice = calculateNormalPrice(t.brand, t.model, t.services)
+        const isPromo = originalPrice > t.computedPrice
+        return {
+          id: t.id,
+          plateNumber: t.plateNumber,
+          brand: t.brand,
+          model: t.model,
+          color: t.color,
+          services: t.services,
+          computedPrice: t.computedPrice,
+          isPromo,
+          ...(isPromo ? { originalPrice } : {}),
+          imageUrl: t.imageUrl,
+          checkInTime: t.checkInTime instanceof Date ? t.checkInTime : new Date(t.checkInTime).toISOString()
+        }
+      }),
       paymentMethod: checkoutModal.paymentMethod,
       cashReceived: checkoutModal.cashReceived,
       selectedAddons: checkoutModal.selectedAddons,
@@ -857,8 +904,10 @@ export default function CashierCheckout({
                     <div className="text-xs text-zinc-500 font-medium">
                       {formatTime(transaction.checkInTime)}
                     </div>
-                    <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">
-                      {formatCurrency(transaction.computedPrice)}
+                    <div className="flex items-center gap-2">
+                      <div className="text-lg sm:text-xl font-black text-blue-600 dark:text-blue-400">
+                        {formatCurrency(transaction.computedPrice)}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1354,7 +1403,14 @@ export default function CashierCheckout({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider">{t('intake.model' as any)}</label>
+                    <label className="block text-sm font-semibold text-zinc-500 mb-1 uppercase tracking-wider flex items-center gap-2">
+                      {t('intake.model' as any)}
+                      {priceBook.find(it => it.brand === editingTransaction.brand && it.model === editingTransaction.model)?.promo_active && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 normal-case">
+                          {t('priceBook.promo' as any) || 'Promo'}
+                        </span>
+                      )}
+                    </label>
                     <select
                       className="w-full bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-4 py-3 text-sm font-bold appearance-none cursor-pointer"
                       value={editingTransaction.model}

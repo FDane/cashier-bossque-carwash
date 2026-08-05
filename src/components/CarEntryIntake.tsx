@@ -36,6 +36,14 @@ const SERVICE_CATEGORIES = {
   engine: { ms: 'Enjin', en: 'Engine' },
 }
 
+/** Returns the promo price for a service if the vehicle has an active promotion
+ *  and a promo price was set for that service; otherwise falls back to the normal price. */
+function getServicePrice(item: any, normalKey: string, promoKey: string): number {
+  if (!item) return 0
+  if (item.promo_active && item[promoKey] > 0) return item[promoKey]
+  return item[normalKey] || 0
+}
+
 export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakeProps) {
   const [isDesktop, setIsDesktop] = useState(false)
   const [showCamera, setShowCamera] = useState(false)
@@ -196,13 +204,13 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     if (!selectedModelData) return 0
     const { exterior, interior, engine } = formData.services
     if (!exterior && !interior && !engine) return 0
-    if (interior && !exterior && !engine) return selectedModelData.vaccuum_price || 0
+    if (interior && !exterior && !engine) return getServicePrice(selectedModelData, 'vaccuum_price', 'promo_vaccuum_price')
 
     let total = 0
-    if (exterior && interior) total = selectedModelData.interior_price || 0
-    else if (exterior && !interior) total = selectedModelData.exterior_price || 0
-    else if (!exterior && interior) total = selectedModelData.vaccuum_price || 0
-    if (engine) total += selectedModelData.engine_price || 0
+    if (exterior && interior) total = getServicePrice(selectedModelData, 'interior_price', 'promo_interior_price')
+    else if (exterior && !interior) total = getServicePrice(selectedModelData, 'exterior_price', 'promo_exterior_price')
+    else if (!exterior && interior) total = getServicePrice(selectedModelData, 'vaccuum_price', 'promo_vaccuum_price')
+    if (engine) total += getServicePrice(selectedModelData, 'engine_price', 'promo_engine_price')
     return total
   }, [formData.services, formData.brand, selectedModels, priceBook])
 
@@ -433,8 +441,13 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
 
         {/* ── Model ─────────────────────────────────────────────────────────── */}
         <div className="space-y-2">
-          <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1">
+          <label className="text-xs font-black text-zinc-500 uppercase tracking-widest ml-1 flex items-center gap-2">
             {t('intake.model' as any)}
+            {priceBook.find(it => it.brand === formData.brand && it.model === selectedModels[0])?.promo_active && (
+              <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 normal-case">
+                {t('priceBook.promo' as any) || 'Promo'}
+              </span>
+            )}
           </label>
           <div className="relative">
             <select
@@ -483,11 +496,24 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
               const selectedModelData = priceBook.find(it => it.brand === formData.brand && it.model === selectedModels[0])
               const isSelected = formData.services[service]
               let displayPrice = 0
+              let normalPrice = 0
               if (selectedModelData) {
-                if (service === 'exterior') displayPrice = selectedModelData.exterior_price
-                if (service === 'engine') displayPrice = selectedModelData.engine_price
-                if (service === 'interior') displayPrice = formData.services.exterior ? selectedModelData.interior_price : selectedModelData.vaccuum_price
+                if (service === 'exterior') {
+                  normalPrice = selectedModelData.exterior_price
+                  displayPrice = getServicePrice(selectedModelData, 'exterior_price', 'promo_exterior_price')
+                }
+                if (service === 'engine') {
+                  normalPrice = selectedModelData.engine_price
+                  displayPrice = getServicePrice(selectedModelData, 'engine_price', 'promo_engine_price')
+                }
+                if (service === 'interior') {
+                  normalPrice = formData.services.exterior ? selectedModelData.interior_price : selectedModelData.vaccuum_price
+                  displayPrice = formData.services.exterior
+                    ? getServicePrice(selectedModelData, 'interior_price', 'promo_interior_price')
+                    : getServicePrice(selectedModelData, 'vaccuum_price', 'promo_vaccuum_price')
+                }
               }
+              const isPromo = selectedModelData?.promo_active && displayPrice > 0 && displayPrice < normalPrice
               const Icon = service === 'exterior' ? Car : service === 'interior' ? Sparkles : Zap
               return (
                 <button
@@ -503,14 +529,28 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
-                    <div className={`text-sm font-bold uppercase tracking-tight ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                    <div className={`text-sm font-bold uppercase tracking-tight flex items-center gap-1.5 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
                       {SERVICE_CATEGORIES[service][language as 'en' | 'ms']}
                       {service === 'interior' && formData.services.exterior && (
                         <span className="ml-2 text-[10px] opacity-60 lowercase font-normal italic">(Package)</span>
                       )}
+                      {isPromo && (
+                        <span className="text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                          {t('priceBook.promo' as any) || 'Promo'}
+                        </span>
+                      )}
                     </div>
-                    <div className="text-zinc-900 dark:text-white text-lg font-black leading-tight">
-                      {displayPrice > 0 ? formatCurrency(displayPrice) : '--'}
+                    <div className="flex items-center gap-2">
+                      {isPromo ? (
+                        <>
+                          <span className="text-zinc-400 dark:text-zinc-600 text-sm font-bold line-through">{formatCurrency(normalPrice)}</span>
+                          <span className="text-amber-600 dark:text-amber-400 text-lg font-black leading-tight">{formatCurrency(displayPrice)}</span>
+                        </>
+                      ) : (
+                        <span className="text-zinc-900 dark:text-white text-lg font-black leading-tight">
+                          {displayPrice > 0 ? formatCurrency(displayPrice) : '--'}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-zinc-300 dark:border-zinc-700'}`}>

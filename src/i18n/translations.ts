@@ -114,6 +114,7 @@ export const translations = {
     'priceBook.model': 'Model',
     'priceBook.price': 'Base Price',
     'priceBook.addTitle': 'Add New Car Price',
+    'priceBook.promo': 'Promotions',
 
     // Payment Modal
     'payment.title': 'Payment Settlement',
@@ -401,6 +402,7 @@ export const translations = {
     'priceBook.model': 'Model',
     'priceBook.price': 'Harga Asas',
     'priceBook.addTitle': 'Tambah Harga Kereta Baru',
+    'priceBook.promo': 'Promosi',
 
     // Payment Modal
     'payment.title': 'Penyelesaian Pembayaran',

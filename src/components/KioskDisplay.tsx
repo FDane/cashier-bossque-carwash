@@ -32,6 +32,8 @@ interface Transaction {
   model: string
   color?: string
   computedPrice: number
+  originalPrice?: number
+  isPromo?: boolean
   services: { exterior?: boolean; interior?: boolean; engine?: boolean }
   imageUrl?: string | null
   checkInTime: string | Date
@@ -100,7 +102,7 @@ function kioskStateChanged(prev: KioskState, next: KioskState): boolean {
   if (prev.miscCharges.length !== next.miscCharges.length) return true
   for (let i = 0; i < next.transactions.length; i++) {
     const a = prev.transactions[i], b = next.transactions[i]
-    if (!a || a.id !== b.id || a.computedPrice !== b.computedPrice) return true
+    if (!a || a.id !== b.id || a.computedPrice !== b.computedPrice || a.isPromo !== b.isPromo || a.originalPrice !== b.originalPrice) return true
   }
   return false
 }
@@ -272,13 +274,14 @@ function IdleScreen() {
 
 // ─── Payment Popup ─────────────────────────────────────────────────────────────
 const PaymentPopup = memo(function PaymentPopup({
-  paymentMethod, totalAmount, cashReceived, balance, phase,
+  paymentMethod, totalAmount, cashReceived, balance, phase, promoSavings
 }: {
   paymentMethod: 'CASH' | 'ONLINE'
   totalAmount: number
   cashReceived: number
   balance: number
   phase: PopupPhase
+  promoSavings?: number
 }) {
   const { t } = useLanguage()
   const isProcessing = phase === 'payment'
@@ -322,11 +325,22 @@ const PaymentPopup = memo(function PaymentPopup({
             <span className="block text-zinc-400 text-sm font-black uppercase tracking-widest mb-1">
               {t('payment.totalAmount')}
             </span>
-            <div
-              className="text-zinc-900"
-              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 80, lineHeight: 1 }}
-            >
-              {fmt(totalAmount)}
+            {/* ── UPDATED: Large Original Price Side-by-Side ── */}
+            <div className="flex items-center justify-center gap-4">
+              {promoSavings && promoSavings > 0 ? (
+                <div
+                  className="text-zinc-300 line-through"
+                  style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 50, lineHeight: 1 }}
+                >
+                  {fmt(totalAmount + promoSavings)}
+                </div>
+              ) : null}
+              <div
+                className="text-zinc-900"
+                style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 80, lineHeight: 1 }}
+              >
+                {fmt(totalAmount)}
+              </div>
             </div>
           </div>
           {cashReceived > 0 && (
@@ -385,11 +399,22 @@ const PaymentPopup = memo(function PaymentPopup({
 
       <div className="text-center mt-2">
         <p className="text-zinc-500 font-bold mb-2">{t('payment.qrInstruction')}</p>
-        <div
-          className="text-indigo-600 font-black"
-          style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 60 }}
-        >
-          {fmt(totalAmount)}
+        {/* ── UPDATED: Large Original Price Side-by-Side ── */}
+        <div className="flex items-center justify-center gap-4">
+          {promoSavings && promoSavings > 0 ? (
+            <div
+              className="text-zinc-300 line-through"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 44, lineHeight: 1 }}
+            >
+              {fmt(totalAmount + promoSavings)}
+            </div>
+          ) : null}
+          <div
+            className="text-indigo-600 font-black"
+            style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 60, lineHeight: 1 }}
+          >
+            {fmt(totalAmount)}
+          </div>
         </div>
       </div>
     </div>
@@ -469,7 +494,7 @@ const CollageCell = memo(function CollageCell({
       style={{
         overflow: 'hidden',
         position: 'relative',
-        background: '#18181b', // Premium dark background for "contain" images
+        background: '#18181b',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -478,7 +503,6 @@ const CollageCell = memo(function CollageCell({
     >
       {url ? (
         <>
-          {/* Loading Shimmer (Skeleton) */}
           {!imgLoaded && (
             <div className="absolute inset-0 bg-zinc-800 animate-pulse flex items-center justify-center">
                <Loader className="w-8 h-8 text-zinc-600 animate-spin" />
@@ -488,7 +512,6 @@ const CollageCell = memo(function CollageCell({
             src={url}
             alt={plate}
             onLoad={() => setImgLoaded(true)}
-            // Changed to contain: prevents portrait/landscape cropping
             style={{ 
               width: '100%', 
               height: '100%', 
@@ -503,8 +526,6 @@ const CollageCell = memo(function CollageCell({
           <Car className="w-8 h-8 text-zinc-600" />
         </div>
       )}
-
-      {/* Solid label (no blur) for performance */}
       {url && (
         <div className="absolute bottom-4 left-4 bg-zinc-900/90 px-3 py-1.5 rounded-lg border border-white/10 shadow-lg">
           <span className="text-white text-xs font-black tracking-widest uppercase">
@@ -518,9 +539,9 @@ const CollageCell = memo(function CollageCell({
 
 // ─── Confirmed Overlay ─────────────────────────────────────────────────────────
 const ConfirmedOverlay = memo(function ConfirmedOverlay({
-  totalAmount, onDone,
+  totalAmount, promoSavings, onDone,
 }: {
-  totalAmount: number; onDone: () => void
+  totalAmount: number; promoSavings?: number; onDone: () => void
 }) {
   const [, setCountdown] = useState(Math.round(CONFIRMED_MS / 1000))
 
@@ -549,12 +570,25 @@ const ConfirmedOverlay = memo(function ConfirmedOverlay({
 
       <div className="flex flex-col items-center gap-4 text-center">
         <h2 className="text-emerald-600 font-black text-2xl uppercase tracking-widest">Transaksi Selesai</h2>
-        <div
-          className="text-zinc-900"
-          style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 80, lineHeight: 1 }}
-        >
-          {fmt(totalAmount)}
+        
+        {/* ── UPDATED: Large Original Price Side-by-Side ── */}
+        <div className="flex items-center justify-center gap-4">
+          {promoSavings && promoSavings > 0 ? (
+            <div
+              className="text-zinc-300 line-through"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 50, lineHeight: 1 }}
+            >
+              {fmt(totalAmount + promoSavings)}
+            </div>
+          ) : null}
+          <div
+            className="text-zinc-900"
+            style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 80, lineHeight: 1 }}
+          >
+            {fmt(totalAmount)}
+          </div>
         </div>
+
         <p className="text-zinc-500 font-bold mt-2 text-lg">Terima kasih! Sila datang lagi 🚗</p>
       </div>
 
@@ -605,27 +639,42 @@ const SectionHeader = memo(function SectionHeader({
 })
 
 const LineItem = memo(function LineItem({
-  label, sublabel, amount, accent
+  label, sublabel, amount, originalAmount, isPromo, accent, delay
 }: {
-  label: string; sublabel?: string; amount: number; accent?: boolean; delay?: number
+  label: string; sublabel?: string; amount: number; originalAmount?: number; isPromo?: boolean; accent?: boolean; delay?: number
 }) {
   return (
     <div
       className="flex items-center justify-between px-5 py-4 rounded-2xl bg-white border border-zinc-100 shadow-sm"
     >
       <div className="min-w-0 mr-4">
-        <span className="text-zinc-800 font-bold text-sm block truncate">{label}</span>
+        <span className="text-zinc-800 font-bold text-sm flex items-center gap-2 truncate">
+          {label}
+          {isPromo && (
+            <span className="flex-shrink-0 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+              Promo
+            </span>
+          )}
+        </span>
         {sublabel && (
           <span className="text-zinc-400 text-xs font-bold mt-1 uppercase tracking-wider block">
             {sublabel}
           </span>
         )}
       </div>
-      <div
-        className="font-black text-lg flex-shrink-0 tabular-nums"
-        style={{ color: accent ? '#3b82f6' : '#27272a' }}
-      >
-        {fmt(amount)}
+      {/* ── UPDATED: Flex container for side-by-side prominent pricing ── */}
+      <div className="flex-shrink-0 flex items-baseline gap-3 text-right">
+        {isPromo && originalAmount != null && originalAmount > amount && (
+          <div className="text-zinc-400 font-black text-lg tabular-nums line-through opacity-75">
+            {fmt(originalAmount)}
+          </div>
+        )}
+        <div
+          className="font-black text-lg tabular-nums"
+          style={{ color: isPromo ? '#d97706' : (accent ? '#3b82f6' : '#27272a') }}
+        >
+          {fmt(amount)}
+        </div>
       </div>
     </div>
   )
@@ -646,6 +695,15 @@ function CheckoutScreen({ state }: { state: KioskState }) {
   const primaryTx = transactions[0]
   const isMulti = transactions.length > 1
   const carColor = COLOR_MAP[primaryTx?.color || ''] || '#2563eb'
+
+  const promoSavings = useMemo(() => {
+    return transactions.reduce((sum, tx) => {
+      if (tx.isPromo && tx.originalPrice != null && tx.originalPrice > tx.computedPrice) {
+        return sum + (tx.originalPrice - tx.computedPrice)
+      }
+      return sum
+    }, 0)
+  }, [transactions])
 
   const activeServices = useMemo(
     () => Object.entries(primaryTx?.services || {}).filter(([, v]) => v).map(([k]) => k),
@@ -784,6 +842,8 @@ function CheckoutScreen({ state }: { state: KioskState }) {
               label={`${tx.brand} ${tx.model} – ${activeServices.map(s => SERVICE_LABELS[s as keyof typeof SERVICE_LABELS]?.label).join(', ') || t('intake.services')}`}
               sublabel={isMulti ? tx.plateNumber : undefined}
               amount={tx.computedPrice}
+              originalAmount={tx.originalPrice}
+              isPromo={tx.isPromo}
             />
           ))}
 
@@ -824,12 +884,28 @@ function CheckoutScreen({ state }: { state: KioskState }) {
                 {transactions.length} Kenderaan
                 {selectedAddons.length > 0 ? ` + ${selectedAddons.length} Item` : ''}
               </p>
+              {promoSavings > 0 && (
+                <span className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 rounded-full bg-amber-100 text-amber-700 text-xs font-black uppercase tracking-wider">
+                  You Saved {fmt(promoSavings)}
+                </span>
+              )}
             </div>
-            <div
-              className="text-zinc-900"
-              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 64 }}
-            >
-              {fmt(totalAmount)}
+            {/* ── UPDATED: Big original price next to big final price ── */}
+            <div className="flex items-baseline gap-4">
+              {promoSavings > 0 && (
+                <div
+                  className="text-zinc-300 line-through"
+                  style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 44 }}
+                >
+                  {fmt(totalAmount + promoSavings)}
+                </div>
+              )}
+              <div
+                className="text-zinc-900"
+                style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 64 }}
+              >
+                {fmt(totalAmount)}
+              </div>
             </div>
           </div>
         </div>
@@ -842,13 +918,18 @@ function CheckoutScreen({ state }: { state: KioskState }) {
             <PaymentPopup
               paymentMethod={paymentMethod} totalAmount={totalAmount}
               cashReceived={cashReceived} balance={balance} phase={popupPhase}
+              promoSavings={promoSavings}
             />
           </div>
         )}
 
         {showConfirmedOverlay && (
           <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/95 backdrop-blur-sm">
-             <ConfirmedOverlay totalAmount={totalAmount} onDone={handleConfirmedDone} />
+             <ConfirmedOverlay 
+               totalAmount={totalAmount} 
+               promoSavings={promoSavings} 
+               onDone={handleConfirmedDone} 
+             />
           </div>
         )}
       </div>
