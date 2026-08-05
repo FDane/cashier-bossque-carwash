@@ -639,7 +639,7 @@ const SectionHeader = memo(function SectionHeader({
 })
 
 const LineItem = memo(function LineItem({
-  label, sublabel, amount, originalAmount, isPromo, accent, delay
+  label, sublabel, amount, originalAmount, isPromo, accent,
 }: {
   label: string; sublabel?: string; amount: number; originalAmount?: number; isPromo?: boolean; accent?: boolean; delay?: number
 }) {
