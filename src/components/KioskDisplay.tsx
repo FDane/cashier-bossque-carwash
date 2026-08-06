@@ -142,6 +142,27 @@ function useKioskState() {
   return state
 }
 
+// ─── Idle Promo Slides Hook ────────────────────────────────────────────────────
+// Reads settings/kiosk_promos → { slides: string[] }. Swap promo images by
+// editing that Firestore doc — no redeploy needed. Falls back to the plain
+// branding screen when the array is empty or the doc doesn't exist yet.
+const PROMO_INTERVAL_MS = 8_000
+
+function useKioskPromos() {
+  const [slides, setSlides] = useState<string[]>([])
+
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'kiosk_promos'), snapshot => {
+      const data = snapshot.exists() ? snapshot.data() : null
+      const next = Array.isArray(data?.slides) ? data!.slides.filter((s: unknown) => typeof s === 'string' && s.length > 0) : []
+      setSlides(next)
+    })
+    return () => unsub()
+  }, [])
+
+  return slides
+}
+
 // ─── Car SVG ──────────────────────────────────────────────────────────────────
 const CarSilhouette = memo(function CarSilhouette({ color = '#2563eb' }: { color?: string }) {
   return (
@@ -190,9 +211,46 @@ const FooterClock = memo(function FooterClock() {
   )
 })
 
+// Plain crossfading <img> stack — no CSS backdrop-filter, no video, no
+// BroadcastChannel — kept simple on purpose for the P60 tablet's WebView 51.
+function usePromoIndex(count: number) {
+  const [index, setIndex] = useState(0)
+
+  useEffect(() => {
+    setIndex(0) // slide list changed (e.g. promos edited remotely) → restart from the top
+    if (count < 2) return
+    const id = setInterval(() => {
+      setIndex(i => (i + 1) % count)
+    }, PROMO_INTERVAL_MS)
+    return () => clearInterval(id)
+  }, [count])
+
+  return index
+}
+
+const PromoSlideshow = memo(function PromoSlideshow({ slides, index }: { slides: string[]; index: number }) {
+  return (
+    <div className="absolute inset-0">
+      {slides.map((src, i) => (
+        <img
+          key={src}
+          src={src}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          style={{ opacity: i === index ? 1 : 0, transition: 'opacity 1s ease' }}
+          loading={i === 0 ? 'eager' : 'lazy'}
+        />
+      ))}
+    </div>
+  )
+})
+
 function IdleScreen() {
   const [mounted, setMounted] = useState(false)
   const [time, setTime] = useState<Date | null>(null)
+  const promoSlides = useKioskPromos()
+  const hasPromos = promoSlides.length > 0
+  const promoIndex = usePromoIndex(promoSlides.length)
 
   useEffect(() => {
     setMounted(true)
@@ -209,65 +267,138 @@ function IdleScreen() {
     ? time.toLocaleDateString('ms-MY', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
     : ''
 
+  // No promo slides configured yet → fall back to the plain branding + clock screen.
+  if (!hasPromos) {
+    return (
+      <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-zinc-50">
+        <div className="idle-bg absolute inset-0" />
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{ backgroundImage: 'radial-gradient(#000000 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}
+        />
+        <div className="relative z-10 flex flex-col items-center gap-8 text-center px-8">
+          <div className="flex flex-col items-center gap-6">
+            <img
+              src="/logo.png"
+              alt="Bossque Carwash Logo"
+              width={120}
+              height={120}
+              className="rounded-2xl object-contain shadow-2xl"
+              loading="eager"
+              fetchPriority="high"
+            />
+            <h1
+              className="text-center font-black text-6xl tracking-widest text-zinc-900 uppercase"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)" }}
+            >
+              CARWASH <span className="text-blue-600">BOSSQUE</span>
+            </h1>
+          </div>
+          <div className="flex flex-col items-center gap-4">
+            <div
+              className="text-zinc-900 leading-none"
+              style={{
+                fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)",
+                fontSize: '140px',
+                letterSpacing: '-4px',
+              }}
+              suppressHydrationWarning
+            >
+              {timeStr}
+            </div>
+            <p
+              className="text-indigo-600 font-bold text-3xl uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)" }}
+              suppressHydrationWarning
+            >
+              {dateStr}
+            </p>
+          </div>
+          <p className="text-zinc-400 text-sm font-bold uppercase tracking-widest">
+            Selamat Datang • Sila Tunggu Sebentar
+          </p>
+        </div>
+        <style>{`
+          .idle-bg {
+            background: #f9fafb;
+            animation: idlePulse 10s ease-in-out infinite;
+          }
+          @keyframes idlePulse {
+            0%, 100% { background-color: #f9fafb; }
+            50%       { background-color: #f3f4f6; }
+          }
+        `}</style>
+      </div>
+    )
+  }
+
+  // Promo slides configured → the slideshow and the branding/clock strip
+  // now sit in separate stacked sections (not overlaid), so the footer no
+  // longer crops or covers part of the image.
   return (
-    <div className="relative w-full h-full flex items-center justify-center overflow-hidden bg-zinc-50">
-      <div className="idle-bg absolute inset-0" />
+    <div className="relative w-full h-full overflow-hidden bg-zinc-950 flex flex-col">
+      <div className="relative flex-1 min-h-0">
+        <PromoSlideshow slides={promoSlides} index={promoIndex} />
+
+        {promoSlides.length > 1 && (
+          <div className="absolute top-6 inset-x-0 z-10 flex items-center justify-center gap-2">
+            {promoSlides.map((_, i) => (
+              <span
+                key={i}
+                className="h-1.5 rounded-full"
+                style={{
+                  width: 24,
+                  background: i === promoIndex ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.3)',
+                  transition: 'background 0.3s ease',
+                }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+
       <div
-        className="absolute inset-0 opacity-[0.03]"
-        style={{ backgroundImage: 'radial-gradient(#000000 1.5px, transparent 1.5px)', backgroundSize: '40px 40px' }}
-      />
-      <div className="relative z-10 flex flex-col items-center gap-8 text-center px-8">
-        <div className="flex flex-col items-center gap-6">
+        className="flex-shrink-0 z-10 px-10 py-6 flex items-center justify-between shadow-[0_-10px_30px_rgba(0,0,0,0.35)]"
+        style={{ background: '#09090b' }}
+      >
+        <div className="flex items-center gap-4">
           <img
             src="/logo.png"
             alt="Bossque Carwash Logo"
-            width={120}
-            height={120}
-            className="rounded-2xl object-contain shadow-2xl"
+            width={52}
+            height={52}
+            className="rounded-xl object-contain flex-shrink-0"
             loading="eager"
             fetchPriority="high"
           />
-          <h1
-            className="text-center font-black text-6xl tracking-widest text-zinc-900 uppercase"
-            style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)" }}
-          >
-            CARWASH <span className="text-blue-600">BOSSQUE</span>
-          </h1>
+          <div className="flex flex-col">
+            <span
+              className="text-white leading-none uppercase tracking-widest"
+              style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 30 }}
+            >
+              CARWASH <span className="text-blue-400">BOSSQUE</span>
+            </span>
+            <span className="text-zinc-300 text-xs font-bold uppercase tracking-widest mt-1">
+              Selamat Datang • Sila Tunggu Sebentar
+            </span>
+          </div>
         </div>
-        <div className="flex flex-col items-center gap-4">
+        <div className="flex flex-col items-end">
           <div
-            className="text-zinc-900 leading-none"
-            style={{
-              fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)",
-              fontSize: '140px',
-              letterSpacing: '-4px',
-            }}
+            className="text-white leading-none"
+            style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)", fontSize: 56, letterSpacing: '-1px' }}
             suppressHydrationWarning
           >
             {timeStr}
           </div>
           <p
-            className="text-indigo-600 font-bold text-3xl uppercase tracking-widest"
-            style={{ fontFamily: "var(--font-bebas, 'Bebas Neue', sans-serif)" }}
+            className="text-blue-300 font-bold text-sm uppercase tracking-widest mt-1"
             suppressHydrationWarning
           >
             {dateStr}
           </p>
         </div>
-        <p className="text-zinc-400 text-sm font-bold uppercase tracking-widest">
-          Selamat Datang • Sila Tunggu Sebentar
-        </p>
       </div>
-      <style>{`
-        .idle-bg {
-          background: #f9fafb;
-          animation: idlePulse 10s ease-in-out infinite;
-        }
-        @keyframes idlePulse {
-          0%, 100% { background-color: #f9fafb; }
-          50%       { background-color: #f3f4f6; }
-        }
-      `}</style>
     </div>
   )
 }
