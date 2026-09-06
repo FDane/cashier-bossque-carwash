@@ -16,9 +16,11 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
 
   return (
     <CashierAuthProvider>
-      <AppHeader />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <CashierLayout>{children}</CashierLayout>
+      <div className="flex flex-col h-[100dvh] overflow-hidden">
+        <AppHeader />
+        <div className={pathname === '/' ? "flex-1 min-h-0 overflow-hidden" : "flex-1 overflow-y-auto w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"}>
+          <CashierLayout>{children}</CashierLayout>
+        </div>
       </div>
     </CashierAuthProvider>
   )

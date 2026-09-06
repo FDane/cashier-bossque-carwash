@@ -283,14 +283,14 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
   // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <div className="relative bg-white dark:bg-zinc-900/90 sm:backdrop-blur-xl rounded-[2rem] border border-zinc-200 dark:border-zinc-800 p-6 sm:p-8 shadow-2xl transition-all duration-300 mt-4 sm:mt-0 mb-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center shadow-lg shadow-blue-500/20">
-          <Car className="w-6 h-6 text-white" />
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 mb-6 border-b border-zinc-200 dark:border-zinc-800 pb-4">
+        <div className="w-10 h-10 bg-zinc-900 dark:bg-white flex items-center justify-center">
+          <Car className="w-5 h-5 text-white dark:text-zinc-900" />
         </div>
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">{t('intake.title' as any)}</h2>
-          <p className="text-gray-600 dark:text-zinc-400 text-sm">{t('intake.subtitle' as any)}</p>
+          <h2 className="text-lg font-bold text-zinc-900 dark:text-white uppercase tracking-wider">{t('intake.title' as any)}</h2>
+          <p className="text-zinc-500 text-xs font-medium uppercase tracking-widest">{t('intake.subtitle' as any)}</p>
         </div>
       </div>
 
@@ -417,7 +417,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
             value={formData.plateNumber}
             onChange={handlePlateNumberChange}
             placeholder={t('intake.plateNumber.placeholder' as any)}
-            className="w-full bg-zinc-100 dark:bg-zinc-800/50 border-2 border-transparent focus:border-blue-500 focus:bg-white dark:focus:bg-zinc-800 rounded-2xl px-5 py-4 text-2xl font-mono font-black placeholder-zinc-400 dark:placeholder-zinc-600 text-zinc-900 dark:text-white transition-all outline-none"
+            className="w-full bg-surface-a0 border border-surface-a20 focus:bg-surface-tonal focus:border-primary-a0 rounded-xl px-5 py-4 text-3xl font-mono font-black placeholder-zinc-300 dark:placeholder-zinc-700 text-zinc-900 dark:text-white transition-colors outline-none"
           />
         </div>
 
@@ -430,7 +430,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
             <select
               value={formData.brand}
               onChange={(e) => handleBrandChange(e.target.value)}
-              className="w-full appearance-none bg-zinc-100 dark:bg-zinc-800/50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3.5 text-zinc-900 dark:text-white font-bold outline-none transition-all"
+              className="w-full appearance-none bg-surface-a0 border border-surface-a20 focus:bg-surface-tonal focus:border-primary-a0 rounded-xl px-5 py-4 text-zinc-900 dark:text-white font-bold outline-none transition-colors"
             >
               <option value="">{t('intake.brand.placeholder' as any)}</option>
               {availableBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
@@ -454,7 +454,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
               disabled={!formData.brand}
               value={selectedModels[0] || ''}
               onChange={(e) => setSelectedModels([e.target.value])}
-              className="w-full appearance-none bg-zinc-100 dark:bg-zinc-800/50 border-2 border-transparent focus:border-blue-500 rounded-2xl px-5 py-3.5 text-zinc-900 dark:text-white font-bold outline-none transition-all disabled:opacity-50"
+              className="w-full appearance-none bg-surface-a0 border border-surface-a20 focus:bg-surface-tonal focus:border-primary-a0 rounded-xl px-5 py-4 text-zinc-900 dark:text-white font-bold outline-none transition-colors disabled:opacity-50"
             >
               <option value="">{t('intake.model.placeholder' as any)}</option>
               {availableModels.map((model) => <option key={model} value={model}>{model}</option>)}
@@ -475,9 +475,9 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                 key={color}
                 type="button"
                 onClick={() => handleColorChange(color)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border-2 ${formData.color === color
-                    ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 border-zinc-900 dark:border-white shadow-md'
-                    : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
+                className={`px-4 py-3 text-xs font-bold transition-colors rounded-xl border ${formData.color === color
+                    ? 'bg-primary-a0 text-white border-primary-a0'
+                    : 'bg-surface-a0 text-zinc-500 border-surface-a20 hover:border-primary-a0 hover:text-primary-a0'
                   }`}
               >
                 {t(`color.${color}` as any)}
@@ -520,16 +520,16 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                   key={service}
                   type="button"
                   onClick={() => handleServiceChange(service)}
-                  className={`group flex items-center gap-4 p-4 rounded-2xl border-2 transition-all duration-300 text-left ${isSelected
-                      ? 'bg-blue-600/10 border-blue-600 dark:bg-blue-500/10 dark:border-blue-500'
-                      : 'bg-zinc-100 dark:bg-zinc-800/50 border-transparent hover:border-zinc-300 dark:hover:border-zinc-700'
+                  className={`group flex items-center gap-4 p-4 border rounded-xl transition-colors text-left ${isSelected
+                      ? 'bg-surface-tonal border-primary-a0'
+                      : 'bg-surface-a0 border-surface-a20 hover:border-primary-a0'
                     }`}
                 >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400'}`}>
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center transition-colors ${isSelected ? 'bg-primary-a0 text-white' : 'bg-surface-a10 text-zinc-400'}`}>
                     <Icon className="w-5 h-5" />
                   </div>
                   <div className="flex-1">
-                    <div className={`text-sm font-bold uppercase tracking-tight flex items-center gap-1.5 ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-zinc-500 dark:text-zinc-400'}`}>
+                    <div className={`text-sm font-bold uppercase tracking-tight flex items-center gap-1.5 ${isSelected ? 'text-primary-a0' : 'text-zinc-500 dark:text-zinc-400'}`}>
                       {SERVICE_CATEGORIES[service][language as 'en' | 'ms']}
                       {service === 'interior' && formData.services.exterior && (
                         <span className="ml-2 text-[10px] opacity-60 lowercase font-normal italic">(Package)</span>
@@ -553,7 +553,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
                       )}
                     </div>
                   </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-blue-600 border-blue-600' : 'border-zinc-300 dark:border-zinc-700'}`}>
+                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${isSelected ? 'bg-primary-a0 border-primary-a0' : 'border-surface-a20'}`}>
                     {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[4]" />}
                   </div>
                 </button>
@@ -562,13 +562,11 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           </div>
         </div>
 
-        {/* ── Price & Submit — floating on mobile ───────────────────────────── */}
-        <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-lg border-t border-zinc-200 dark:border-zinc-800 sm:relative sm:p-0 sm:bg-transparent sm:backdrop-blur-none sm:border-none z-50 space-y-3">
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-3xl p-5 sm:p-6 shadow-xl shadow-blue-500/20 transition-all">
-            <div className="flex justify-between items-center">
-              <span className="text-blue-100 font-bold uppercase tracking-widest text-xs">{t('intake.price' as any)}</span>
-              <span className="text-2xl sm:text-3xl font-black text-white">{formatCurrency(estimatedPrice)}</span>
-            </div>
+        {/* ── Price & Submit ────────────────────────────────────────────────── */}
+        <div className="pt-6 border-t border-zinc-200 dark:border-zinc-800 space-y-4">
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-500 font-black uppercase tracking-widest text-xs">{t('intake.price' as any)}</span>
+            <span className="text-3xl font-mono font-black text-zinc-900 dark:text-white">{formatCurrency(estimatedPrice)}</span>
           </div>
 
           <div className="flex gap-3">
@@ -594,10 +592,10 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
             <button
               type="submit"
               disabled={loading || aiLoading}
-              className="flex-1 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 hover:opacity-90 active:scale-[0.98] disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed font-black py-4 sm:py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-lg sm:text-xl shadow-xl"
+              className="flex-1 bg-primary-a0 text-white rounded-xl hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed font-bold py-5 px-6 transition-colors flex items-center justify-center gap-3 text-lg uppercase tracking-wider"
             >
               {loading ? <Loader2 className="w-6 h-6 animate-spin" /> : <Plus className="w-6 h-6" />}
-              <span className="uppercase tracking-widest">{t('intake.addQueue' as any)}</span>
+              <span>{t('intake.addQueue' as any)}</span>
             </button>
           </div>
         </div>
