@@ -9,7 +9,11 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        primary: '#3b82f6',
+        primary: 'hsl(var(--primary))',
+        background: 'hsl(var(--background))',
+        surface: 'hsl(var(--surface))',
+        foreground: 'hsl(var(--foreground))',
+        border: 'hsl(var(--border))',
         accent: '#10b981',
         danger: '#ef4444',
         warning: '#f59e0b',
