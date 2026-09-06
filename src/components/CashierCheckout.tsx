@@ -44,6 +44,10 @@ interface CashierCheckoutProps {
   pendingTransactions: Transaction[]
   loading: boolean
   printerOnline: boolean
+  /** Whether the Car Entry (Rekod Kenderaan) sidebar is open on desktop.
+   *  Controls the queue grid column count: 3 cols when open (narrower space),
+   *  4 cols when closed (full width available). Defaults to true. */
+  isSidebarOpen?: boolean
 }
 
 const SERVICE_CATEGORIES = {
@@ -100,6 +104,7 @@ export default function CashierCheckout({
   pendingTransactions,
   loading: transactionsLoading,
   printerOnline,
+  isSidebarOpen = true,
 }: CashierCheckoutProps) {
   const { t, language } = useLanguage()
   const { printReceipt, isPrinting } = usePrinter({ autoRetry: true, retryCount: 2 })
@@ -790,7 +795,7 @@ export default function CashierCheckout({
       )}
 
       {!transactionsLoading && filteredTransactions.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${isSidebarOpen ? 'lg:grid-cols-3' : 'lg:grid-cols-4'} gap-4 sm:gap-6`}>
           {filteredTransactions.map((transaction) => {
             const isSelected = selectedIds.includes(transaction.id)
             return (

@@ -8,8 +8,6 @@ import { useTransactions } from '@/hooks/useTransactions'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useSystemStatus } from '@/hooks/useSystemStatus'
 import { 
-  ChevronDown, 
-  ChevronUp, 
   Wallet, 
   Banknote, 
   Plus, 
@@ -21,16 +19,22 @@ import {
   Printer,
   Monitor,
   RefreshCw,
+  Car,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import { listenToTodayAdjustments, addCashAdjustment, deleteCashAdjustment, getStaffList, listenToTodayAttendance, recordStaffAdvance } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency, getKLDateString } from '@/lib/utils'
 
+type TabState = 'intake' | 'cashier'
+
 export default function Dashboard() {
   const { t, language } = useLanguage()
   const { printerOnline, kioskOnline, checkPrinter, checkKiosk } = useSystemStatus()
-  const [isCheckoutExpanded, setIsCheckoutExpanded] = useState(false)
-  const [isCashDrawerOpen, setIsCashDrawerOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<TabState>('intake')
+  const [isCarEntryOpen, setIsCarEntryOpen] = useState(true)
+  
   const [adjustments, setAdjustments] = useState<any[]>([])
   const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [showAdjModal, setShowAdjModal] = useState<'EXPENSE' | 'ADDITION' | null>(null)
@@ -309,7 +313,6 @@ export default function Dashboard() {
     });
   };
 
-  // Helper to render status badge
   const StatusBadge = ({ online }: { online: boolean | null }) => {
     if (online === null) return (
       <div className="flex items-center gap-1.5">
@@ -331,14 +334,166 @@ export default function Dashboard() {
     )
   }
 
+  const renderCashDrawer = () => (
+    <div className="animate-in fade-in slide-in-from-top-4 duration-500 flex flex-col gap-6 w-full">
+      {/* 1. Title */}
+      <div className="flex items-center gap-3">
+        <div className="p-2 bg-emerald-500/10 rounded-lg">
+          <Banknote className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
+        </div>
+        <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
+          {t('stats.cashDrawer' as any)}
+        </h3>
+      </div>
+
+      {/* 2. Big Total Item */}
+      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-3xl p-5 sm:p-6 flex flex-col items-center justify-center text-center shadow-sm">
+        <div className="text-xs font-bold text-emerald-600/80 dark:text-emerald-400/80 uppercase tracking-widest mb-2">
+          {t('stats.cashDrawer.total' as any)}
+        </div>
+        <div className="text-3xl sm:text-4xl font-black text-emerald-600 dark:text-emerald-400 break-all">
+          RM {cashBreakdown.grandTotal.toFixed(2)}
+        </div>
+      </div>
+
+      {/* 3. 2x2 Buttons */}
+      <div className="grid grid-cols-2 gap-2.5">
+        <button 
+          onClick={() => setShowAdjModal('ADDITION')}
+          className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95"
+        >
+          <Plus className="w-5 h-5" /> {t('stats.addCash' as any)}
+        </button>
+        <button 
+          onClick={() => setShowAdjModal('EXPENSE')}
+          className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider shadow-lg shadow-red-500/20 active:scale-95"
+        >
+          <Minus className="w-5 h-5" /> {t('stats.addExpense' as any)}
+        </button>
+        <button 
+          onClick={() => setShowAdvanceModal(true)}
+          className="p-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider active:scale-95 shadow-sm"
+        >
+          <UserPlus className="w-5 h-5" /> {t('staff.addAdvance' as any)}
+        </button>
+        <button 
+          onClick={() => setShowExchangeModal(true)}
+          className="p-3 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider active:scale-95 border border-zinc-300 dark:border-zinc-700 shadow-sm"
+        >
+          <ArrowLeftRight className="w-5 h-5" /> {t('stats.exchange' as any)}
+        </button>
+      </div>
+
+      {/* 4. Analytics — stacked rows (this column is narrow, so no multi-col breakpoint) */}
+      <div className="grid grid-cols-1 gap-2.5">
+        <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
+            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">{t('stats.salesCash' as any)}</span>
+          </div>
+          <span className="text-sm font-bold text-zinc-900 dark:text-white">{formatCurrency(cashBreakdown.totalCashValue)}</span>
+        </div>
+        <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
+            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">{t('stats.totalAdditions' as any)}</span>
+          </div>
+          <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">+{formatCurrency(cashBreakdown.totalAdditions)}</span>
+        </div>
+        <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
+            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">{t('stats.totalExpenses' as any)}</span>
+          </div>
+          <span className="text-sm font-bold text-red-600 dark:text-red-400">-{formatCurrency(cashBreakdown.totalExpenses)}</span>
+        </div>
+      </div>
+
+      {/* 5. Cash Stacks (Bills) — fixed 2-col grid, sized for the narrow drawer column */}
+      <div className="grid grid-cols-2 gap-3">
+        {[1, 5, 10, 20, 50, 100].map((bill) => {
+          const count = cashBreakdown.breakdown[bill] || 0
+          const colors: Record<number, string> = {
+            1: 'from-blue-500/20 to-blue-600/5 text-blue-600',
+            5: 'from-green-500/20 to-green-600/5 text-green-600',
+            10: 'from-red-500/20 to-red-600/5 text-red-600',
+            20: 'from-orange-500/20 to-orange-600/5 text-orange-600',
+            50: 'from-cyan-500/20 to-cyan-600/5 text-cyan-600',
+            100: 'from-purple-500/20 to-purple-600/5 text-purple-600',
+          }
+          return (
+            <div 
+              key={bill}
+              className={`bg-gradient-to-br ${colors[bill]} border border-white/10 dark:border-white/5 rounded-2xl p-3.5 shadow-sm transition-transform hover:scale-[1.02]`}
+            >
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-black opacity-60 uppercase">RM{bill}</span>
+                <span className="text-[9px] font-bold opacity-50 uppercase tracking-tighter">{t('stats.billCount' as any)}</span>
+              </div>
+              <div className="flex flex-col items-center justify-center py-2">
+                <div className="text-4xl lg:text-5xl font-black leading-none">
+                  {count}
+                </div>
+              </div>
+              <div className="mt-2.5 pt-2 border-t border-white/20 dark:border-white/10 flex items-center justify-between">
+                <span className="text-[9px] font-bold opacity-50 uppercase tracking-tighter">{t('stats.subtotal' as any)}</span>
+                <span className="text-xs font-bold opacity-80">RM {(bill * count).toFixed(0)}</span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* 6. Cash Adjustments */}
+      <div className="mt-2">
+        <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
+          {t('stats.adjustments' as any)}
+        </h3>
+        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          {adjustments.length === 0 ? (
+            <div className="text-center py-12 opacity-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
+              <p className="text-sm font-medium text-zinc-500">{t('stats.noAdjustments' as any)}</p>
+            </div>
+          ) : (
+            adjustments.map((adj) => (
+              <div key={adj.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl flex items-center justify-between group">
+                <div className="flex items-center gap-3">
+                  <div className={`p-2 rounded-lg ${adj.type === 'ADDITION' ? 'bg-blue-500/10 text-blue-600' : 'bg-red-500/10 text-red-600'}`}>
+                    {adj.type === 'ADDITION' ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold text-zinc-900 dark:text-white">{adj.reason}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase font-bold">
+                      {adj.timestamp?.toDate ? adj.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div className={`text-sm font-black ${adj.type === 'ADDITION' ? 'text-blue-600' : 'text-red-600'}`}>
+                    {adj.type === 'ADDITION' ? '+' : '-'} {formatCurrency(adj.amount)}
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteAdjustment(adj.id)}
+                    className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+
   return (
     <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-950 dark:text-white transition-colors duration-200">
       <Toaster />
 
       {/* System Status Bar */}
-      <div className="hidden sm:block bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/50 px-4 sm:px-6 lg:px-8 py-2 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto flex items-center justify-end gap-8">
-          {/* Printer Status */}
+      <div className="hidden sm:block w-full bg-white dark:bg-zinc-950 border-b border-zinc-200 dark:border-zinc-800/50 px-4 sm:px-6 py-2 transition-colors duration-200">
+        <div className="w-full flex items-center justify-end gap-8">
           <button
             onClick={checkPrinter}
             title={t('status.refreshPrinter' as any)}
@@ -356,7 +511,6 @@ export default function Dashboard() {
 
           <div className="w-px h-3 bg-zinc-200 dark:bg-zinc-800" />
 
-          {/* Kiosk Status */}
           <button
             onClick={checkKiosk}
             title={t('status.refreshKiosk' as any)}
@@ -374,218 +528,103 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-32 lg:pb-8">
-        {/* Two-Phase Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Phase 1: Car Entry Intake (Left Column) */}
-          <div className="lg:col-span-1">
-            <CarEntryIntake />
-          </div>
-
-          {/* Phase 2: Cashier Checkout (Center/Right Columns) */}
-          <div className="lg:col-span-2">
-            {/* Mobile Toggle for Checkout */}
-            <div className="lg:hidden mb-4">
-              <button
-                onClick={() => setIsCheckoutExpanded(!isCheckoutExpanded)}
-                className="w-full flex items-center justify-between p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[1.5rem] shadow-xl active:scale-[0.98] transition-all"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-green-500/10 flex items-center justify-center">
-                    <Wallet className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  </div>
-                  <div className="text-left">
-                    <span className="block text-sm font-black uppercase tracking-tight text-zinc-900 dark:text-white">
-                      {t('cashier.title' as any)}
-                    </span>
-                    <span className="block text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                      {pendingTransactions.length} {t('cashier.queue' as any)}
-                    </span>
-                  </div>
-                </div>
-                {isCheckoutExpanded ? <ChevronUp className="w-5 h-5 text-zinc-400" /> : <ChevronDown className="w-5 h-5 text-zinc-400" />}
-              </button>
+      {/* Mobile Tab Navigation */}
+      <div className="lg:hidden sticky top-0 z-40 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-lg border-b border-zinc-200 dark:border-zinc-800 p-2">
+        <div className="flex bg-zinc-100 dark:bg-zinc-900 rounded-xl p-1 gap-1">
+          <button
+            onClick={() => setActiveTab('intake')}
+            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all ${
+              activeTab === 'intake' 
+                ? 'bg-white dark:bg-zinc-800 shadow-sm text-blue-600 dark:text-blue-400' 
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            <Car className="w-5 h-5 mb-1" />
+            <span className="text-[10px] font-black uppercase tracking-tight">{t('intake.title' as any) || 'Rekod'}</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('cashier')}
+            className={`flex-1 flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all ${
+              activeTab === 'cashier' 
+                ? 'bg-white dark:bg-zinc-800 shadow-sm text-green-600 dark:text-green-400' 
+                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
+            }`}
+          >
+            <div className="relative">
+              <Wallet className="w-5 h-5 mb-1" />
+              {pendingTransactions.length > 0 && (
+                <span className="absolute -top-1 -right-2 w-4 h-4 bg-red-500 text-white text-[9px] rounded-full flex items-center justify-center font-bold">
+                  {pendingTransactions.length}
+                </span>
+              )}
             </div>
+            <span className="text-[10px] font-black uppercase tracking-tight">{t('cashier.title' as any) || 'Cashier'}</span>
+          </button>
+        </div>
+      </div>
 
-            <div className={`${isCheckoutExpanded ? 'block' : 'hidden'} lg:block animate-in fade-in slide-in-from-top-2 duration-300`}>
+      <main className="w-full px-4 sm:px-6 py-4 sm:py-8 pb-32 lg:pb-8">
+        
+        {/* MOBILE VIEW */}
+        <div className="block lg:hidden">
+          {activeTab === 'intake' && (
+            <div className="animate-in fade-in slide-in-from-left-4 duration-300">
+              <CarEntryIntake />
+            </div>
+          )}
+          {activeTab === 'cashier' && (
+            <div className="animate-in fade-in slide-in-from-right-4 duration-300">
               <CashierCheckout
                 pendingTransactions={pendingTransactions}
                 loading={pendingLoading}
                 printerOnline={printerOnline ?? false}
               />
             </div>
+          )}
+        </div>
+
+        {/* DESKTOP VIEW - Full Screen 3 Column Layout */}
+        <div className="hidden lg:flex flex-row gap-6 items-start">
+          {/* Column 1: Rekod Kenderaan (Collapsible) */}
+          <div className={`transition-all duration-300 ease-in-out shrink-0 relative ${isCarEntryOpen ? 'w-full lg:w-[400px] xl:w-[450px] opacity-100' : 'w-0 opacity-0 overflow-hidden hidden'}`}>
+            <div className="absolute -right-4 top-2 z-10 hidden lg:block">
+               {/* Spacer to avoid absolute button overflow cutoff, button moved out */}
+            </div>
+            {isCarEntryOpen && (
+              <div className="bg-blue-50/60 dark:bg-blue-500/[0.05] border border-blue-100 dark:border-blue-900/30 rounded-[2.25rem] p-3 sm:p-4">
+                <CarEntryIntake />
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* Mobile Toggle for Cash Drawer */}
-        <div className="lg:hidden mt-8 mb-4">
-          <button
-            onClick={() => setIsCashDrawerOpen(!isCashDrawerOpen)}
-            className="w-full flex items-center justify-between p-5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-[1.5rem] shadow-xl active:scale-[0.98] transition-all"
-          >
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center">
-                <Banknote className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-              </div>
-              <div className="text-left">
-                <span className="block text-sm font-black uppercase tracking-tight text-zinc-900 dark:text-white">
-                  {t('stats.cashDrawer' as any)}
-                </span>
-                <span className="block text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                  RM {cashBreakdown.grandTotal.toFixed(2)}
-                </span>
-              </div>
-            </div>
-            {isCashDrawerOpen ? <ChevronUp className="w-5 h-5 text-zinc-400" /> : <ChevronDown className="w-5 h-5 text-zinc-400" />}
-          </button>
-        </div>
+          {/* Toggle Button for Desktop */}
+          <div className="hidden lg:flex items-start pt-2">
+            <button 
+              onClick={() => setIsCarEntryOpen(!isCarEntryOpen)}
+              className="p-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-full shadow-sm hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors text-zinc-500"
+              title={isCarEntryOpen ? "Close Rekod Kenderaan" : "Open Rekod Kenderaan"}
+            >
+              {isCarEntryOpen ? <PanelLeftClose className="w-5 h-5" /> : <PanelLeftOpen className="w-5 h-5" />}
+            </button>
+          </div>
 
-        {/* Cashier Box Breakdown */}
-        <div className={`mt-8 lg:mt-12 animate-in fade-in slide-in-from-top-4 duration-500 ${isCashDrawerOpen ? 'block' : 'hidden'} lg:block`}>
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-emerald-500/10 rounded-lg">
-              <Banknote className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <div className="flex-1 flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-              <div>
-                <h3 className="text-xl font-bold text-zinc-900 dark:text-white mb-1">
-                  {t('stats.cashDrawer' as any)}
-                </h3>
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                  <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest whitespace-nowrap">
-                    {t('stats.cashDrawer.total' as any)}: <span className="text-emerald-600 dark:text-emerald-400 font-black ml-1">RM {cashBreakdown.grandTotal.toFixed(2)}</span>
-                  </div>
-                  <div className="grid grid-cols-2 sm:flex gap-2">
-                    <button 
-                      onClick={() => setShowAdjModal('ADDITION')}
-                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95"
-                    >
-                      <Plus className="w-3.5 h-3.5" /> {t('stats.addCash' as any)}
-                    </button>
-                    <button 
-                      onClick={() => setShowAdjModal('EXPENSE')}
-                      className="px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider shadow-lg shadow-red-500/20 active:scale-95"
-                    >
-                      <Minus className="w-3.5 h-3.5" /> {t('stats.addExpense' as any)}
-                    </button>
-                    <button 
-                      onClick={() => setShowAdvanceModal(true)}
-                      className="px-3 py-1.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider active:scale-95"
-                    >
-                      <UserPlus className="w-3.5 h-3.5" /> {t('staff.addAdvance' as any)}
-                    </button>
-                    <button 
-                      onClick={() => setShowExchangeModal(true)}
-                      className="px-3 py-1.5 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-xl transition-all flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider active:scale-95 border border-zinc-300 dark:border-zinc-700"
-                    >
-                      <ArrowLeftRight className="w-3.5 h-3.5" /> {t('stats.exchange' as any)}
-                    </button>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Detailed Breakdown Tags */}
-              <div className="grid grid-cols-1 xs:grid-cols-2 sm:flex sm:flex-wrap gap-2 mt-2 lg:mt-0">
-                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2 shadow-sm">
-                  <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">
-                    {t('stats.salesCash' as any)}: 
-                    <span className="ml-1 text-zinc-900 dark:text-white">{formatCurrency(cashBreakdown.totalCashValue)}</span>
-                  </span>
-                </div>
-                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2 shadow-sm">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">
-                    {t('stats.totalAdditions' as any)}: 
-                    <span className="ml-1 text-indigo-600 dark:text-indigo-400">+{formatCurrency(cashBreakdown.totalAdditions)}</span>
-                  </span>
-                </div>
-                <div className="px-3 py-1.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl flex items-center gap-2 shadow-sm">
-                  <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-                  <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">
-                    {t('stats.totalExpenses' as any)}: 
-                    <span className="ml-1 text-red-600 dark:text-red-400">-{formatCurrency(cashBreakdown.totalExpenses)}</span>
-                  </span>
-                </div>
-              </div>
+          {/* Column 2: Cashier (~60% width) */}
+          <div className="flex-[6_6_0%] min-w-[360px]">
+            <div className="bg-zinc-50/70 dark:bg-zinc-900/40 border border-zinc-200/70 dark:border-zinc-800/60 rounded-[2.25rem] p-3 sm:p-4">
+              <CashierCheckout
+                pendingTransactions={pendingTransactions}
+                loading={pendingLoading}
+                printerOnline={printerOnline ?? false}
+                isSidebarOpen={isCarEntryOpen}
+              />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Bill Grid */}
-            <div className="lg:col-span-2 grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
-              {[1, 5, 10, 20, 50, 100].map((bill) => {
-                const count = cashBreakdown.breakdown[bill] || 0
-                const colors: Record<number, string> = {
-                  1: 'from-blue-500/20 to-blue-600/5 text-blue-600',
-                  5: 'from-green-500/20 to-green-600/5 text-green-600',
-                  10: 'from-red-500/20 to-red-600/5 text-red-600',
-                  20: 'from-orange-500/20 to-orange-600/5 text-orange-600',
-                  50: 'from-cyan-500/20 to-cyan-600/5 text-cyan-600',
-                  100: 'from-purple-500/20 to-purple-600/5 text-purple-600',
-                }
-                return (
-                  <div 
-                    key={bill}
-                    className={`bg-gradient-to-br ${colors[bill]} border border-white/10 dark:border-white/5 rounded-2xl p-4 sm:p-5 shadow-sm transition-transform hover:scale-[1.02]`}
-                  >
-                    <div className="flex justify-between items-start mb-3 sm:mb-4">
-                      <span className="text-xs sm:text-sm font-black opacity-60 uppercase">RM{bill}</span>
-                      <div className="px-2 py-1 rounded-md bg-white/40 dark:bg-black/20 text-[10px] font-black">
-                        x{count}
-                      </div>
-                    </div>
-                    <div className="text-2xl font-black">
-                      RM {(bill * count).toFixed(0)}
-                    </div>
-                    <div className="mt-1 text-[10px] font-bold opacity-50 uppercase tracking-tighter">
-                      Subtotal
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
-
-            {/* Adjustments Log */}
-            <div className="lg:col-span-1">
-              <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
-                {t('stats.adjustments' as any)}
-              </h3>
-              <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-                {adjustments.length === 0 ? (
-                  <div className="text-center py-12 opacity-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                    <p className="text-sm font-medium text-zinc-500">{t('stats.noAdjustments' as any)}</p>
-                  </div>
-                ) : (
-                  adjustments.map((adj) => (
-                    <div key={adj.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl flex items-center justify-between group">
-                      <div className="flex items-center gap-3">
-                        <div className={`p-2 rounded-lg ${adj.type === 'ADDITION' ? 'bg-blue-500/10 text-blue-600' : 'bg-red-500/10 text-red-600'}`}>
-                          {adj.type === 'ADDITION' ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                        </div>
-                        <div>
-                          <div className="text-sm font-bold text-zinc-900 dark:text-white">{adj.reason}</div>
-                          <div className="text-[10px] text-zinc-500 uppercase font-bold">
-                            {adj.timestamp?.toDate ? adj.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className={`text-sm font-black ${adj.type === 'ADDITION' ? 'text-blue-600' : 'text-red-600'}`}>
-                          {adj.type === 'ADDITION' ? '+' : '-'} {formatCurrency(adj.amount)}
-                        </div>
-                        <button 
-                          onClick={() => handleDeleteAdjustment(adj.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 transition-all"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
+          {/* Column 3: Cash Drawer (~40% width) */}
+          <div className="flex-[4_4_0%] min-w-[320px] max-w-[460px]">
+            <div className="bg-emerald-50/50 dark:bg-emerald-500/[0.04] border border-emerald-100 dark:border-emerald-900/30 rounded-[2.25rem] p-3 sm:p-4 lg:sticky lg:top-6">
+              {renderCashDrawer()}
             </div>
           </div>
         </div>
@@ -867,7 +906,7 @@ export default function Dashboard() {
 
       {/* Footer */}
       <footer className="border-t border-gray-200 dark:border-zinc-800 mt-12 py-6 px-4 transition-colors duration-200">
-        <div className="max-w-7xl mx-auto text-center text-gray-600 dark:text-zinc-500 text-sm">
+        <div className="w-full text-center text-gray-600 dark:text-zinc-500 text-sm">
           <p>
             © 2024 {t('app.footer' as any) || 'Bossque Carwash Management System. Built with Next.js & Firebase.'}
           </p>

@@ -17,7 +17,7 @@ export default function LayoutWrapper({ children }: { children: React.ReactNode 
   return (
     <CashierAuthProvider>
       <AppHeader />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className="w-full">
         <CashierLayout>{children}</CashierLayout>
       </div>
     </CashierAuthProvider>
