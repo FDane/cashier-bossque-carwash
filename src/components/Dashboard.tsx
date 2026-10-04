@@ -19,7 +19,7 @@ import {
   PanelLeftOpen,
   ArrowLeftRight,
 } from 'lucide-react'
-import { listenToTodayAdjustments, addCashAdjustment, getStaffList, listenToTodayAttendance, recordStaffAdvance, listenToLatestCashCount, submitCashCount } from '@/lib/firebaseService'
+import { listenToTodayAdjustments, addCashAdjustment, getStaffList, listenToTodayAttendance, recordStaffAdvance, listenToLatestCashCount, listenToTodayCashCounts, submitCashCount } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
 import { formatCurrency } from '@/lib/utils'
 import { auth } from '@/lib/firebase'
@@ -42,6 +42,7 @@ export default function Dashboard() {
   const [showAdvanceModal, setShowAdvanceModal] = useState(false)
   const [showCashCountModal, setShowCashCountModal] = useState(false)
   const [latestCashCount, setLatestCashCount] = useState<CashCount | null>(null)
+  const [todayCashCounts, setTodayCashCounts] = useState<CashCount[]>([])
   const [cashCountLoading, setCashCountLoading] = useState(true)
   const [cashCountError, setCashCountError] = useState(false)
   const [cashCountDenominations, setCashCountDenominations] = useState<CashDenominations>({ ...EMPTY_DENOMINATIONS })
@@ -90,6 +91,7 @@ export default function Dashboard() {
       (count) => { setLatestCashCount(count); setCashCountLoading(false); setCashCountError(false) },
       () => { setCashCountLoading(false); setCashCountError(true) },
     )
+    const unsubCashCounts = listenToTodayCashCounts(setTodayCashCounts, () => setCashCountError(true))
     const unsubAuth = onAuthStateChanged(auth, (user) => {
       setCashierIdentity({ uid: user?.uid ?? null, name: user?.displayName || user?.email || null })
       setCashierLoading(false)
@@ -105,7 +107,7 @@ export default function Dashboard() {
     }
     setup()
 
-    return () => { unsub(); unsubCashCount(); unsubAuth(); if (unsubAttendance) unsubAttendance(); }
+    return () => { unsub(); unsubCashCount(); unsubCashCounts(); unsubAuth(); if (unsubAttendance) unsubAttendance(); }
   }, [])
 
   // Prevent background scrolling when modals are open
@@ -300,6 +302,7 @@ export default function Dashboard() {
       selectedCashierId={selectedCashierId || defaultCashier?.id || ''}
       onCashierChange={setSelectedCashierId}
       latestCashCount={latestCashCount}
+      cashCounts={todayCashCounts}
       loading={cashCountLoading || cashierLoading}
       error={cashCountError}
       adjustments={adjustments}
@@ -399,7 +402,7 @@ export default function Dashboard() {
           )}
           {activeTab === 'cashier' && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
-              <div className="mb-5"><CashManagementPanel t={t} language={language} cashierName={activeCashierIdentity.name || t('cashManagement.cashierRole')} checkedInStaff={checkedInStaff} selectedCashierId={selectedCashierId || defaultCashier?.id || ''} onCashierChange={setSelectedCashierId} latestCashCount={latestCashCount} loading={cashCountLoading || cashierLoading} error={cashCountError} onCount={openCashCount} compact /></div>
+              <div className="mb-5"><CashManagementPanel t={t} language={language} cashierName={activeCashierIdentity.name || t('cashManagement.cashierRole')} checkedInStaff={checkedInStaff} selectedCashierId={selectedCashierId || defaultCashier?.id || ''} onCashierChange={setSelectedCashierId} latestCashCount={latestCashCount} cashCounts={todayCashCounts} loading={cashCountLoading || cashierLoading} error={cashCountError} onCount={openCashCount} compact /></div>
               <CashierCheckout
                 pendingTransactions={pendingTransactions}
                 loading={pendingLoading}

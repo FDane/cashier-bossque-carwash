@@ -110,6 +110,7 @@ export type CashDenominations = Record<1 | 5 | 10 | 20 | 50 | 100, number>
 
 export interface CashCount {
   id: string
+  date?: string
   shiftId: string | null
   terminalId: string | null
   cashierId: string | null

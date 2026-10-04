@@ -926,13 +926,28 @@ export function listenToLatestCashCount(callback: (count: CashCount | null) => v
   const q = query(
     collection(db, CASH_COUNTS_COLLECTION),
     where('date', '==', todayDateString()),
-    orderBy('createdAt', 'desc'),
-    limit(1),
   )
   return onSnapshot(q, (snapshot) => {
-    const latest = snapshot.docs[0]
-    callback(latest ? { id: latest.id, ...latest.data() } as CashCount : null)
+    const latest = snapshot.docs
+      .map((item) => ({ id: item.id, ...item.data() } as CashCount))
+      .sort((a, b) => cashCountTime(b) - cashCountTime(a))[0]
+    callback(latest || null)
   }, onError)
+}
+
+export function listenToTodayCashCounts(callback: (counts: CashCount[]) => void, onError?: (error: Error) => void): Unsubscribe {
+  const q = query(
+    collection(db, CASH_COUNTS_COLLECTION),
+    where('date', '==', todayDateString()),
+  )
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as CashCount)).sort((a, b) => cashCountTime(b) - cashCountTime(a)))
+  }, onError)
+}
+
+function cashCountTime(count: CashCount) {
+  const value = count.createdAt?.toDate ? count.createdAt.toDate() : new Date(count.createdAt || 0)
+  return Number.isNaN(value.getTime()) ? 0 : value.getTime()
 }
 
 /** Intended for a future admin reconciliation view. */

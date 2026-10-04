@@ -16,6 +16,7 @@ interface CashManagementPanelProps {
   selectedCashierId?: string
   onCashierChange?: (staffId: string) => void
   latestCashCount: CashCount | null
+  cashCounts?: CashCount[]
   loading: boolean
   error: boolean
   adjustments?: any[]
@@ -38,7 +39,7 @@ function initials(name: string) {
 }
 
 export default function CashManagementPanel({
-  t, language, cashierName, checkedInStaff = [], selectedCashierId = '', onCashierChange, latestCashCount, loading, error, adjustments = [], compact = false,
+  t, language, cashierName, checkedInStaff = [], selectedCashierId = '', onCashierChange, latestCashCount, cashCounts = [], loading, error, adjustments = [], compact = false,
   onCount, onCashIn, onCashOut, onAdvance, onExchange,
 }: CashManagementPanelProps) {
   const [now, setNow] = useState(() => Date.now())
@@ -113,6 +114,11 @@ export default function CashManagementPanel({
         )}
         <button onClick={onCount} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-zinc-950 px-4 py-3.5 text-xs font-black uppercase tracking-wider text-white shadow-sm transition-colors hover:bg-zinc-800 active:scale-[0.99] dark:bg-white dark:text-zinc-950 dark:hover:bg-zinc-200"><Calculator className="h-5 w-5" />{latestCashCount ? t('cashManagement.countNow') : t('cashManagement.startCount')}</button>
       </div>
+
+      {cashCounts.length > 0 && <div className="rounded-2xl bg-white p-4 ring-1 ring-zinc-200 dark:bg-zinc-900 dark:ring-zinc-800">
+        <div className="mb-3 flex items-center justify-between"><div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">{t('cashManagement.todayActivity')}</div><span className="rounded-full bg-zinc-100 px-2 py-1 text-[9px] font-black text-zinc-500 dark:bg-zinc-800">{cashCounts.length}</span></div>
+        <div className="max-h-48 space-y-2 overflow-y-auto pr-1 custom-scrollbar">{cashCounts.map((count) => { const createdAt = toDate(count.createdAt); return <div key={count.id} className="flex items-center justify-between rounded-xl bg-zinc-50 p-3 dark:bg-zinc-800/60"><div><div className="text-xs font-bold text-zinc-900 dark:text-white">{count.cashierName}</div><div className="text-[10px] text-zinc-500">{createdAt?.toLocaleTimeString(locale, { timeZone: 'Asia/Kuala_Lumpur', hour: 'numeric', minute: '2-digit' }) || t('cashManagement.justSubmitted')}</div></div><div className="text-sm font-black text-zinc-900 dark:text-white">{formatCurrency(count.countedTotal)}</div></div> })}</div>
+      </div>}
 
       {!compact && <>
         <div className="rounded-2xl bg-zinc-50 p-4 ring-1 ring-zinc-200 dark:bg-zinc-900/50 dark:ring-zinc-800"><div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">{t('cashManagement.routine')}</div><p className="mt-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">{t('cashManagement.updateHourly')}</p><p className="mt-1 text-xs leading-5 text-zinc-500">{t('cashManagement.routineDescription')}</p></div>
