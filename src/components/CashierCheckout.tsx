@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useCallback } from 'react'
 import {
   Search,
   CreditCard,
@@ -454,7 +454,7 @@ export default function CashierCheckout({
 
   /** Same shape as calculatePrice, but always the normal (non-promo) price —
    *  used to show customers the "before" price on the kiosk when a promo is active. */
-  const calculateNormalPrice = (brand: string, model: string, services: any) => {
+  const calculateNormalPrice = useCallback((brand: string, model: string, services: any) => {
     const selectedModelData = priceBook.find(
       it => it.brand === brand && it.model === model
     )
@@ -483,7 +483,7 @@ export default function CashierCheckout({
     }
 
     return total
-  }
+  }, [priceBook])
 
   const handleUpdate = async () => {
     if (!editingTransaction) return
@@ -715,7 +715,7 @@ export default function CashierCheckout({
       totalAmount: totalWithAddons,
       balance,
     })
-  }, [checkoutModal, totalWithAddons, balance])
+  }, [checkoutModal, totalWithAddons, balance, calculateNormalPrice])
 
   return (
     <div className="space-y-6 sm:space-y-8">

@@ -146,7 +146,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     } finally {
       setAiLoading(false)
     }
-  }, [priceBook])
+  }, [priceBook, t])
 
   // ─── Image helpers ──────────────────────────────────────────────────────────
 

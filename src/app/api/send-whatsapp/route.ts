@@ -60,8 +60,6 @@ export async function POST(request: Request) {
 
     // 6. Handle Success
     const responseData = await response.json();
-    console.log("WhatsApp message sent successfully. Message ID:", responseData.idMessage);
-
     return NextResponse.json({ 
       success: true,
       idMessage: responseData.idMessage 

@@ -28,6 +28,8 @@ import {
   PaymentMethod,
   DailyStats,
   CarService,
+  CashCount,
+  CashDenominations,
 } from '@/types'
 import { getKLDateString } from './utils'
 
@@ -36,6 +38,7 @@ const TRANSACTIONS_COLLECTION = 'transactions'
 const DAILY_STATS_COLLECTION = 'daily_stats'
 const PRICE_BOOK_COLLECTION = 'price_book'
 const CASH_ADJUSTMENTS_COLLECTION = 'cash_adjustments'
+const CASH_COUNTS_COLLECTION = 'cashCounts'
 const DAILY_SALARIES_COLLECTION = 'daily_salaries'
 
 // Same logic as StaffManagement.tsx — keep these in sync
@@ -354,11 +357,18 @@ export function listenToTransactions(
   status: TransactionStatus,
   callback: (transactions: Transaction[]) => void
 ): Unsubscribe {
-  const q = query(
-    collection(db, TRANSACTIONS_COLLECTION),
+  const timeField = status === 'PENDING' ? 'checkInTime' : 'paidTime'
+  const constraints = [
     where('status', '==', status),
-    orderBy(status === 'PENDING' ? 'checkInTime' : 'paidTime', 'desc')
-  )
+    ...(status === 'COMPLETED' ? (() => {
+      const today = todayDateString()
+      const startOfToday = new Date(`${today}T00:00:00+08:00`)
+      const startOfTomorrow = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000)
+      return [where(timeField, '>=', startOfToday), where(timeField, '<', startOfTomorrow)]
+    })() : []),
+    orderBy(timeField, 'desc'),
+  ]
+  const q = query(collection(db, TRANSACTIONS_COLLECTION), ...constraints)
 
   return onSnapshot(q, (snapshot) => {
     const transactions: Transaction[] = []
@@ -879,6 +889,57 @@ export function listenToTodayAdjustments(callback: (items: any[]) => void): Unsu
     const items: any[] = []
     snapshot.forEach((d) => items.push({ id: d.id, ...d.data() }))
     callback(items)
+  })
+}
+
+/** Immutable physical drawer counts. Corrections must be new records. */
+export async function submitCashCount(input: {
+  shiftId?: string | null
+  terminalId?: string | null
+  cashierId?: string | null
+  cashierName: string
+  denominations: CashDenominations
+}) {
+  if (!input.cashierName.trim() || Object.values(input.denominations).some((quantity) => !Number.isSafeInteger(quantity) || quantity < 0)) {
+    throw new Error('Invalid cash count')
+  }
+
+  const countedTotal = Object.entries(input.denominations).reduce(
+    (sum, [bill, quantity]) => sum + Number(bill) * quantity,
+    0
+  )
+
+  return addDoc(collection(db, CASH_COUNTS_COLLECTION), {
+    date: todayDateString(),
+    shiftId: input.shiftId ?? null,
+    terminalId: input.terminalId ?? null,
+    cashierId: input.cashierId ?? null,
+    cashierName: input.cashierName,
+    denominations: input.denominations,
+    countedTotal,
+    createdAt: serverTimestamp(),
+    type: 'REGULAR_COUNT',
+  })
+}
+
+export function listenToLatestCashCount(callback: (count: CashCount | null) => void, onError?: (error: Error) => void): Unsubscribe {
+  const q = query(
+    collection(db, CASH_COUNTS_COLLECTION),
+    where('date', '==', todayDateString()),
+    orderBy('createdAt', 'desc'),
+    limit(1),
+  )
+  return onSnapshot(q, (snapshot) => {
+    const latest = snapshot.docs[0]
+    callback(latest ? { id: latest.id, ...latest.data() } as CashCount : null)
+  }, onError)
+}
+
+/** Intended for a future admin reconciliation view. */
+export function listenToCashCounts(callback: (counts: CashCount[]) => void): Unsubscribe {
+  const q = query(collection(db, CASH_COUNTS_COLLECTION), orderBy('createdAt', 'desc'))
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map((item) => ({ id: item.id, ...item.data() } as CashCount)))
   })
 }
 

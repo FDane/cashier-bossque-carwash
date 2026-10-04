@@ -105,3 +105,17 @@ export interface CashierAuthDoc {
   // optional ISO string or Firestore timestamp
   updatedAt?: any
 }
+
+export type CashDenominations = Record<1 | 5 | 10 | 20 | 50 | 100, number>
+
+export interface CashCount {
+  id: string
+  shiftId: string | null
+  terminalId: string | null
+  cashierId: string | null
+  cashierName: string
+  denominations: CashDenominations
+  countedTotal: number
+  createdAt: any
+  type: 'REGULAR_COUNT'
+}

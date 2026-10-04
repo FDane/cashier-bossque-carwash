@@ -1,33 +1,34 @@
 'use client'
 
 import React, { useMemo, useState, useEffect } from 'react'
-import toast, { Toaster } from 'react-hot-toast'
+import { Toaster } from 'react-hot-toast'
 import CarEntryIntake from '@/components/CarEntryIntake'
 import CashierCheckout from '@/components/CashierCheckout'
+import CashManagementPanel from '@/components/CashManagementPanel'
 import { useTransactions } from '@/hooks/useTransactions'
 import { useLanguage } from '@/hooks/useLanguage'
 import { useSystemStatus } from '@/hooks/useSystemStatus'
 import { 
   Wallet, 
-  Banknote, 
-  Plus, 
-  Minus, 
   X, 
-  Trash2,
-  UserPlus,
-  ArrowLeftRight,
   Printer,
   Monitor,
   RefreshCw,
   Car,
   PanelLeftClose,
   PanelLeftOpen,
+  ArrowLeftRight,
 } from 'lucide-react'
-import { listenToTodayAdjustments, addCashAdjustment, deleteCashAdjustment, getStaffList, listenToTodayAttendance, recordStaffAdvance } from '@/lib/firebaseService'
+import { listenToTodayAdjustments, addCashAdjustment, getStaffList, listenToTodayAttendance, recordStaffAdvance, listenToLatestCashCount, submitCashCount } from '@/lib/firebaseService'
 import { showToast } from '@/lib/toast'
-import { formatCurrency, getKLDateString } from '@/lib/utils'
+import { formatCurrency } from '@/lib/utils'
+import { auth } from '@/lib/firebase'
+import { onAuthStateChanged } from 'firebase/auth'
+import type { CashCount, CashDenominations } from '@/types'
 
 type TabState = 'intake' | 'cashier'
+const EMPTY_DENOMINATIONS: CashDenominations = { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }
+const BILLS = [100, 50, 20, 10, 5, 1] as const
 
 export default function Dashboard() {
   const { t, language } = useLanguage()
@@ -39,6 +40,15 @@ export default function Dashboard() {
   const [showExchangeModal, setShowExchangeModal] = useState(false)
   const [showAdjModal, setShowAdjModal] = useState<'EXPENSE' | 'ADDITION' | null>(null)
   const [showAdvanceModal, setShowAdvanceModal] = useState(false)
+  const [showCashCountModal, setShowCashCountModal] = useState(false)
+  const [latestCashCount, setLatestCashCount] = useState<CashCount | null>(null)
+  const [cashCountLoading, setCashCountLoading] = useState(true)
+  const [cashCountError, setCashCountError] = useState(false)
+  const [cashCountDenominations, setCashCountDenominations] = useState<CashDenominations>({ ...EMPTY_DENOMINATIONS })
+  const [cashCountSaving, setCashCountSaving] = useState(false)
+  const [cashierIdentity, setCashierIdentity] = useState<{ uid: string | null; name: string | null }>({ uid: null, name: null })
+  const [selectedCashierId, setSelectedCashierId] = useState('')
+  const [cashierLoading, setCashierLoading] = useState(true)
   const [staffMap, setStaffMap] = useState<Record<string, any>>({})
   const [attendance, setAttendance] = useState<any[]>([])
   const [adjForm, setAdjForm] = useState({ 
@@ -57,17 +67,33 @@ export default function Dashboard() {
   })
   const [loading, setLoading] = useState(false)
 
+  const checkedInStaff = useMemo(() => attendance
+    .filter((row) => !row.clockOutTime)
+    .map((row) => ({ id: row.staffId, ...staffMap[row.staffId] }))
+    .filter((staff, index, list) => list.findIndex((item) => item.id === staff.id) === index), [attendance, staffMap])
+  const defaultCashier = checkedInStaff.find((staff) => staff.role === 'CASHIER' || staff.isCashier)
+  const activeCashier = checkedInStaff.find((staff) => staff.id === selectedCashierId) || defaultCashier
+  const activeCashierIdentity = {
+    uid: activeCashier?.id || cashierIdentity.uid,
+    name: activeCashier?.name || activeCashier?.displayName || cashierIdentity.name,
+  }
+
   // Listen to PENDING transactions (intake queue)
   const {
     transactions: pendingTransactions,
     loading: pendingLoading,
   } = useTransactions('PENDING')
 
-  // Listen to COMPLETED transactions (past records)
-  const { transactions: completedTransactions } = useTransactions('COMPLETED')
-
   useEffect(() => {
     const unsub = listenToTodayAdjustments(setAdjustments)
+    const unsubCashCount = listenToLatestCashCount(
+      (count) => { setLatestCashCount(count); setCashCountLoading(false); setCashCountError(false) },
+      () => { setCashCountLoading(false); setCashCountError(true) },
+    )
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
+      setCashierIdentity({ uid: user?.uid ?? null, name: user?.displayName || user?.email || null })
+      setCashierLoading(false)
+    })
     
     let unsubAttendance: any
     const setup = async () => {
@@ -79,12 +105,12 @@ export default function Dashboard() {
     }
     setup()
 
-    return () => { unsub(); if (unsubAttendance) unsubAttendance(); }
+    return () => { unsub(); unsubCashCount(); unsubAuth(); if (unsubAttendance) unsubAttendance(); }
   }, [])
 
   // Prevent background scrolling when modals are open
   useEffect(() => {
-    if (showAdjModal || showAdvanceModal || showExchangeModal) {
+    if (showAdjModal || showAdvanceModal || showExchangeModal || showCashCountModal) {
       document.body.style.overflow = 'hidden'
     } else {
       document.body.style.overflow = 'unset'
@@ -92,68 +118,40 @@ export default function Dashboard() {
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [showAdjModal, showAdvanceModal, showExchangeModal])
+  }, [showAdjModal, showAdvanceModal, showExchangeModal, showCashCountModal])
 
-  // Filter transactions to only include those completed today
-  const todayCompleted = useMemo(() => {
-    const todayStr = getKLDateString()
-    return completedTransactions.filter(trans => {
-      if (!trans.paidTime) return true 
-      const paidDate = trans.paidTime instanceof Date ? trans.paidTime : new Date(trans.paidTime)
-      return getKLDateString(paidDate) === todayStr
-    })
-  }, [completedTransactions])
+  const countedTotal = useMemo(() => Object.entries(cashCountDenominations).reduce(
+    (sum, [bill, quantity]) => sum + Number(bill) * quantity,
+    0
+  ), [cashCountDenominations])
 
-  // Aggregated Cash Breakdown
-  const cashBreakdown = useMemo(() => {
-    const breakdown: Record<number, number> = { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 }
-    let totalCashValue = 0
+  const updateCashCount = (bill: keyof CashDenominations, delta: number) => {
+    setCashCountDenominations((current) => ({
+      ...current,
+      [bill]: Math.max(0, current[bill] + delta),
+    }))
+  }
 
-    todayCompleted.forEach(trans => {
-      const denominations = (trans as any).denominations
-      const changeDenominations = (trans as any).changeDenominations
-      if (trans.paymentMethod === 'CASH' && denominations) {
-        Object.entries(denominations).forEach(([bill, count]) => {
-          const b = parseInt(bill)
-          const c = count as number
-          breakdown[b] = (breakdown[b] || 0) + c
-          totalCashValue += (b * c)
-        })
-      }
-      if (trans.paymentMethod === 'CASH' && changeDenominations) {
-        Object.entries(changeDenominations).forEach(([bill, count]) => {
-          const b = parseInt(bill)
-          const c = count as number
-          breakdown[b] = (breakdown[b] || 0) - c
-          totalCashValue -= (b * c)
-        })
-      }
-    })
-
-    let totalAdditions = 0
-    let totalExpenses = 0
-    adjustments.forEach(adj => {
-      const denominations = adj.denominations
-      if (denominations) {
-        Object.entries(denominations).forEach(([bill, count]) => {
-          const b = parseInt(bill)
-          const c = count as number
-          if (adj.type === 'ADDITION') {
-            breakdown[b] = (breakdown[b] || 0) + c
-          } else {
-            breakdown[b] = (breakdown[b] || 0) - c
-          }
-        })
-      }
-
-      if (adj.type === 'ADDITION') totalAdditions += adj.amount
-      else totalExpenses += adj.amount
-    })
-
-    const grandTotal = totalCashValue + totalAdditions - totalExpenses
-
-    return { breakdown, totalCashValue, totalAdditions, totalExpenses, grandTotal }
-  }, [todayCompleted, adjustments])
+  const handleSubmitCashCount = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (cashCountSaving) return
+    setCashCountSaving(true)
+    try {
+      await submitCashCount({
+        shiftId: null,
+        terminalId: null,
+        cashierId: activeCashierIdentity.uid,
+        cashierName: activeCashierIdentity.name || t('cashManagement.cashierRole'),
+        denominations: cashCountDenominations,
+      })
+      showToast.success(t('cashManagement.countSubmitted'))
+      setCashCountDenominations({ ...EMPTY_DENOMINATIONS })
+    } catch {
+      showToast.error(t('cashManagement.countError'))
+    } finally {
+      setCashCountSaving(false)
+    }
+  }
 
   const handleAdjBillClick = (bill: number) => {
     setAdjForm(prev => {
@@ -268,51 +266,6 @@ export default function Dashboard() {
     }
   }
 
-  const handleDeleteAdjustment = (id: string) => {
-    toast((toastItem) => (
-      <div className="flex flex-col gap-3 p-1 min-w-[280px]">
-        <div className="flex items-center gap-3">
-          <div className="w-12 h-12 rounded-2xl bg-red-500/10 flex items-center justify-center shrink-0">
-            <Trash2 className="w-6 h-6 text-red-600" />
-          </div>
-          <div>
-            <p className="font-black text-zinc-900 dark:text-white text-base">
-              {language === 'ms' ? 'Padam pelarasan?' : 'Delete adjustment?'}
-            </p>
-            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest leading-relaxed">
-              {language === 'ms' ? 'Rekod ini akan dipadamkan dari sistem.' : 'This record will be removed from system.'}
-            </p>
-          </div>
-        </div>
-        <div className="flex gap-2 justify-end mt-2">
-          <button
-            onClick={() => toast.dismiss(toastItem.id)}
-            className="px-4 py-2 text-xs font-bold text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300 transition-colors"
-          >
-            {t('common.cancel' as any)}
-          </button>
-          <button
-            onClick={async () => {
-              toast.dismiss(toastItem.id);
-              try {
-                await deleteCashAdjustment(id);
-                showToast.success(t('common.success' as any));
-              } catch {
-                showToast.error(t('common.error' as any));
-              }
-            }}
-            className="px-6 py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl shadow-lg shadow-red-500/20 transition-all active:scale-95 uppercase tracking-wider"
-          >
-            {t('common.delete' as any)}
-          </button>
-        </div>
-      </div>
-    ), {
-      duration: 6000,
-      position: 'top-center',
-    });
-  };
-
   const StatusBadge = ({ online }: { online: boolean | null }) => {
     if (online === null) return (
       <div className="flex items-center gap-1.5">
@@ -334,49 +287,6 @@ export default function Dashboard() {
     )
   }
 
-  const renderCashDrawer = () => (
-    <div className="animate-in fade-in slide-in-from-top-4 duration-500 flex flex-col gap-6 w-full">
-      {/* 1. Title */}
-      <div className="flex items-center gap-3">
-        <div className="p-2 bg-emerald-500/10 rounded-lg">
-          <Banknote className="w-6 h-6 text-emerald-600 dark:text-emerald-400" />
-        </div>
-        <h3 className="text-xl font-bold text-zinc-900 dark:text-white">
-          {t('stats.cashDrawer' as any)}
-        </h3>
-      </div>
-
-      {/* 2. Big Total Item */}
-      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-3xl p-5 sm:p-6 flex flex-col items-center justify-center text-center shadow-sm">
-        <div className="text-xs font-bold text-emerald-600/80 dark:text-emerald-400/80 uppercase tracking-widest mb-2">
-          {t('stats.cashDrawer.total' as any)}
-        </div>
-        <div className="text-3xl sm:text-4xl font-black text-emerald-600 dark:text-emerald-400 break-all">
-          RM {cashBreakdown.grandTotal.toFixed(2)}
-        </div>
-      </div>
-
-      {/* 3. 2x2 Buttons */}
-      <div className="grid grid-cols-2 gap-2.5">
-        <button 
-          onClick={() => setShowAdjModal('ADDITION')}
-          className="p-3 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider shadow-lg shadow-blue-500/20 active:scale-95"
-        >
-          <Plus className="w-5 h-5" /> {t('stats.addCash' as any)}
-        </button>
-        <button 
-          onClick={() => setShowAdjModal('EXPENSE')}
-          className="p-3 bg-red-600 hover:bg-red-700 text-white rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider shadow-lg shadow-red-500/20 active:scale-95"
-        >
-          <Minus className="w-5 h-5" /> {t('stats.addExpense' as any)}
-        </button>
-        <button 
-          onClick={() => setShowAdvanceModal(true)}
-          className="p-3 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider active:scale-95 shadow-sm"
-        >
-          <UserPlus className="w-5 h-5" /> {t('staff.addAdvance' as any)}
-        </button>
-        <button 
           onClick={() => setShowExchangeModal(true)}
           className="p-3 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider active:scale-95 border border-zinc-300 dark:border-zinc-700 shadow-sm"
         >
@@ -438,53 +348,28 @@ export default function Dashboard() {
               <div className="mt-2.5 pt-2 border-t border-white/20 dark:border-white/10 flex items-center justify-between">
                 <span className="text-[9px] font-bold opacity-50 uppercase tracking-tighter">{t('stats.subtotal' as any)}</span>
                 <span className="text-xs font-bold opacity-80">RM {(bill * count).toFixed(0)}</span>
-              </div>
-            </div>
-          )
-        })}
-      </div>
+  const openCashCount = () => {
+    setShowCashCountModal(true)
+  }
 
-      {/* 6. Cash Adjustments */}
-      <div className="mt-2">
-        <h3 className="text-lg font-bold text-zinc-900 dark:text-white mb-4 flex items-center gap-2">
-          {t('stats.adjustments' as any)}
-        </h3>
-        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
-          {adjustments.length === 0 ? (
-            <div className="text-center py-12 opacity-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-              <p className="text-sm font-medium text-zinc-500">{t('stats.noAdjustments' as any)}</p>
-            </div>
-          ) : (
-            adjustments.map((adj) => (
-              <div key={adj.id} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4 rounded-xl flex items-center justify-between group">
-                <div className="flex items-center gap-3">
-                  <div className={`p-2 rounded-lg ${adj.type === 'ADDITION' ? 'bg-blue-500/10 text-blue-600' : 'bg-red-500/10 text-red-600'}`}>
-                    {adj.type === 'ADDITION' ? <Plus className="w-4 h-4" /> : <Minus className="w-4 h-4" />}
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold text-zinc-900 dark:text-white">{adj.reason}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase font-bold">
-                      {adj.timestamp?.toDate ? adj.timestamp.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className={`text-sm font-black ${adj.type === 'ADDITION' ? 'text-blue-600' : 'text-red-600'}`}>
-                    {adj.type === 'ADDITION' ? '+' : '-'} {formatCurrency(adj.amount)}
-                  </div>
-                  <button 
-                    onClick={() => handleDeleteAdjustment(adj.id)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-zinc-400 hover:text-red-500 transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
+  const renderCashManagement = () => (
+    <CashManagementPanel
+      t={t}
+      language={language}
+      cashierName={activeCashierIdentity.name || t('cashManagement.cashierRole')}
+      checkedInStaff={checkedInStaff}
+      selectedCashierId={selectedCashierId || defaultCashier?.id || ''}
+      onCashierChange={setSelectedCashierId}
+      latestCashCount={latestCashCount}
+      loading={cashCountLoading || cashierLoading}
+      error={cashCountError}
+      adjustments={adjustments}
+      onCount={openCashCount}
+      onCashIn={() => setShowAdjModal('ADDITION')}
+      onCashOut={() => setShowAdjModal('EXPENSE')}
+      onAdvance={() => setShowAdvanceModal(true)}
+      onExchange={() => setShowExchangeModal(true)}
+    />
   )
 
   return (
@@ -575,6 +460,7 @@ export default function Dashboard() {
           )}
           {activeTab === 'cashier' && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="mb-5"><CashManagementPanel t={t} language={language} cashierName={activeCashierIdentity.name || t('cashManagement.cashierRole')} checkedInStaff={checkedInStaff} selectedCashierId={selectedCashierId || defaultCashier?.id || ''} onCashierChange={setSelectedCashierId} latestCashCount={latestCashCount} loading={cashCountLoading || cashierLoading} error={cashCountError} onCount={openCashCount} compact /></div>
               <CashierCheckout
                 pendingTransactions={pendingTransactions}
                 loading={pendingLoading}
@@ -621,10 +507,10 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Column 3: Cash Drawer (~40% width) */}
+          {/* Column 3: Cash Management (~40% width) */}
           <div className="flex-[4_4_0%] min-w-[320px] max-w-[460px]">
             <div className="bg-emerald-50/50 dark:bg-emerald-500/[0.04] border border-emerald-100 dark:border-emerald-900/30 rounded-[2.25rem] p-3 sm:p-4 lg:sticky lg:top-6">
-              {renderCashDrawer()}
+              {renderCashManagement()}
             </div>
           </div>
         </div>
@@ -899,6 +785,61 @@ export default function Dashboard() {
               >
                 {loading ? 'Processing...' : t('common.confirm' as any)}
               </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Blind Cash Count Modal */}
+      {showCashCountModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+          <form onSubmit={handleSubmitCashCount} className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-3xl w-full max-w-lg overflow-hidden shadow-2xl animate-in zoom-in duration-200 my-auto">
+            <div className="p-6 border-b border-zinc-100 dark:border-zinc-800 flex justify-between items-center">
+              <div>
+                <h3 className="text-xl font-bold text-zinc-900 dark:text-white">{t('cashManagement.countTitle')}</h3>
+                <p className="mt-1 text-xs text-zinc-500">{t('cashManagement.countInstruction')}</p>
+              </div>
+              <button type="button" onClick={() => setShowCashCountModal(false)} className="p-2 text-zinc-400 hover:text-zinc-700 dark:hover:text-white" aria-label={t('common.close')}>
+                <X />
+              </button>
+            </div>
+
+            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[60vh] overflow-y-auto custom-scrollbar">
+              {BILLS.map((bill) => (
+                <div key={bill} className="p-3 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-2xl">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-black text-zinc-900 dark:text-white">RM{bill}</span>
+                    <span className="text-xs font-bold text-zinc-500">{formatCurrency(bill * cashCountDenominations[bill])}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={() => updateCashCount(bill, -1)} className="w-10 h-10 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 font-black" aria-label={`${t('cashManagement.decrease')} RM${bill}`}>−</button>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      inputMode="numeric"
+                      value={cashCountDenominations[bill]}
+                      onChange={(event) => setCashCountDenominations((current) => ({ ...current, [bill]: Math.max(0, Math.floor(Number(event.target.value) || 0)) }))}
+                      className="min-w-0 flex-1 h-10 text-center font-black bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl"
+                      aria-label={`${t('cashManagement.quantity')} RM${bill}`}
+                    />
+                    <button type="button" onClick={() => updateCashCount(bill, 1)} className="w-10 h-10 rounded-xl bg-emerald-600 text-white font-black" aria-label={`${t('cashManagement.increase')} RM${bill}`}>+</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-6 bg-zinc-50 dark:bg-zinc-800/50">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">{t('cashManagement.countedTotal')}</span>
+                <span className="text-2xl font-black text-emerald-600">{formatCurrency(countedTotal)}</span>
+              </div>
+              <div className="flex gap-3">
+                <button type="button" onClick={() => setShowCashCountModal(false)} className="flex-1 py-3 font-bold text-zinc-500" disabled={cashCountSaving}>{t('common.cancel')}</button>
+                <button type="submit" disabled={cashCountSaving} className="flex-[2] py-3 bg-emerald-600 rounded-xl font-bold text-white shadow-lg shadow-emerald-500/20 disabled:opacity-50">
+                  {cashCountSaving ? t('common.loading') : t('cashManagement.submitCount')}
+                </button>
+              </div>
             </div>
           </form>
         </div>
