@@ -77,6 +77,7 @@ export default function Dashboard() {
   const activeCashierIdentity = {
     uid: activeCashier?.id || cashierIdentity.uid,
     name: activeCashier?.name || activeCashier?.displayName || cashierIdentity.name,
+    profileImage: activeCashier?.profileImage,
   }
 
   // Listen to PENDING transactions (intake queue)
@@ -298,6 +299,7 @@ export default function Dashboard() {
       t={t}
       language={language}
       cashierName={activeCashierIdentity.name || t('cashManagement.cashierRole')}
+      cashierProfileImage={activeCashierIdentity.profileImage}
       checkedInStaff={checkedInStaff}
       selectedCashierId={selectedCashierId || defaultCashier?.id || ''}
       onCashierChange={setSelectedCashierId}

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ArrowLeftRight, Calculator, Clock3, Minus, Plus, ShieldCheck, UserPlus, WalletCards } from 'lucide-react'
+import { ArrowLeftRight, Calculator, Clock3, Minus, Plus, ShieldCheck, UserPlus, Users, WalletCards } from 'lucide-react'
 import type { TranslationKey } from '@/i18n/translations'
 import type { CashCount } from '@/types'
 import { formatCurrency, getKLDateString } from '@/lib/utils'
@@ -12,7 +12,8 @@ interface CashManagementPanelProps {
   t: Translate
   language: 'en' | 'ms'
   cashierName: string
-  checkedInStaff?: Array<{ id: string; name?: string; displayName?: string }>
+  cashierProfileImage?: string
+  checkedInStaff?: Array<{ id: string; name?: string; displayName?: string; profileImage?: string }>
   selectedCashierId?: string
   onCashierChange?: (staffId: string) => void
   latestCashCount: CashCount | null
@@ -34,12 +35,8 @@ function toDate(value: any): Date | null {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
-function initials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'C'
-}
-
 export default function CashManagementPanel({
-  t, language, cashierName, checkedInStaff = [], selectedCashierId = '', onCashierChange, latestCashCount, cashCounts = [], loading, error, adjustments = [], compact = false,
+  t, language, cashierName, cashierProfileImage, checkedInStaff = [], selectedCashierId = '', onCashierChange, latestCashCount, cashCounts = [], loading, error, adjustments = [], compact = false,
   onCount, onCashIn, onCashOut, onAdvance, onExchange,
 }: CashManagementPanelProps) {
   const [now, setNow] = useState(() => Date.now())
@@ -78,7 +75,7 @@ export default function CashManagementPanel({
       <div className="text-[10px] font-black uppercase tracking-[0.18em] text-zinc-400">{t('cashManagement.currentCashier')}</div>
       {loading ? <div className="mt-3 flex animate-pulse items-center gap-3"><div className="h-10 w-10 rounded-xl bg-zinc-200 dark:bg-zinc-800" /><div className="h-4 w-32 rounded bg-zinc-200 dark:bg-zinc-800" /></div> : (
         <div className="mt-3 flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-900 text-xs font-black text-white dark:bg-zinc-100 dark:text-zinc-900">{initials(cashierName)}</div>
+          {cashierProfileImage ? <img src={cashierProfileImage} alt="" className="h-10 w-10 rounded-xl object-cover" /> : <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-zinc-200 dark:bg-zinc-800"><Users className="h-5 w-5 text-zinc-500" /></div>}
           <div><div className="font-bold text-zinc-900 dark:text-white">{cashierName}</div><div className="text-xs text-zinc-500">{t('cashManagement.cashierRole')}</div></div>
         </div>
       )}
