@@ -287,67 +287,6 @@ export default function Dashboard() {
     )
   }
 
-          onClick={() => setShowExchangeModal(true)}
-          className="p-3 bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 rounded-2xl transition-all flex flex-col items-center justify-center gap-1.5 text-[11px] font-black uppercase tracking-wider active:scale-95 border border-zinc-300 dark:border-zinc-700 shadow-sm"
-        >
-          <ArrowLeftRight className="w-5 h-5" /> {t('stats.exchange' as any)}
-        </button>
-      </div>
-
-      {/* 4. Analytics — stacked rows (this column is narrow, so no multi-col breakpoint) */}
-      <div className="grid grid-cols-1 gap-2.5">
-        <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-blue-500"></div>
-            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">{t('stats.salesCash' as any)}</span>
-          </div>
-          <span className="text-sm font-bold text-zinc-900 dark:text-white">{formatCurrency(cashBreakdown.totalCashValue)}</span>
-        </div>
-        <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>
-            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">{t('stats.totalAdditions' as any)}</span>
-          </div>
-          <span className="text-sm font-bold text-indigo-600 dark:text-indigo-400">+{formatCurrency(cashBreakdown.totalAdditions)}</span>
-        </div>
-        <div className="p-3.5 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl flex items-center justify-between shadow-sm">
-          <div className="flex items-center gap-2">
-            <div className="w-1.5 h-1.5 rounded-full bg-red-500"></div>
-            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-tight">{t('stats.totalExpenses' as any)}</span>
-          </div>
-          <span className="text-sm font-bold text-red-600 dark:text-red-400">-{formatCurrency(cashBreakdown.totalExpenses)}</span>
-        </div>
-      </div>
-
-      {/* 5. Cash Stacks (Bills) — fixed 2-col grid, sized for the narrow drawer column */}
-      <div className="grid grid-cols-2 gap-3">
-        {[1, 5, 10, 20, 50, 100].map((bill) => {
-          const count = cashBreakdown.breakdown[bill] || 0
-          const colors: Record<number, string> = {
-            1: 'from-blue-500/20 to-blue-600/5 text-blue-600',
-            5: 'from-green-500/20 to-green-600/5 text-green-600',
-            10: 'from-red-500/20 to-red-600/5 text-red-600',
-            20: 'from-orange-500/20 to-orange-600/5 text-orange-600',
-            50: 'from-cyan-500/20 to-cyan-600/5 text-cyan-600',
-            100: 'from-purple-500/20 to-purple-600/5 text-purple-600',
-          }
-          return (
-            <div 
-              key={bill}
-              className={`bg-gradient-to-br ${colors[bill]} border border-white/10 dark:border-white/5 rounded-2xl p-3.5 shadow-sm transition-transform hover:scale-[1.02]`}
-            >
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-black opacity-60 uppercase">RM{bill}</span>
-                <span className="text-[9px] font-bold opacity-50 uppercase tracking-tighter">{t('stats.billCount' as any)}</span>
-              </div>
-              <div className="flex flex-col items-center justify-center py-2">
-                <div className="text-4xl lg:text-5xl font-black leading-none">
-                  {count}
-                </div>
-              </div>
-              <div className="mt-2.5 pt-2 border-t border-white/20 dark:border-white/10 flex items-center justify-between">
-                <span className="text-[9px] font-bold opacity-50 uppercase tracking-tighter">{t('stats.subtotal' as any)}</span>
-                <span className="text-xs font-bold opacity-80">RM {(bill * count).toFixed(0)}</span>
   const openCashCount = () => {
     setShowCashCountModal(true)
   }
