@@ -79,23 +79,35 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
+  // Only id + brand + model go to the AI (prices are not needed for recognition)
+  const aiPriceBook = useMemo(
+    () =>
+      priceBook
+        .filter(i => i?.brand && i?.model)
+        .map(i => ({ id: String(i.id ?? `${i.brand}|${i.model}`), brand: i.brand, model: i.model })),
+    [priceBook]
+  )
+
   // ─── Gemini AI Analysis ─────────────────────────────────────────────────────
 
-  const analyzeCarWithGemini = useCallback(async (file: File, brands: string[]) => {
+  const analyzeCarWithGemini = useCallback(async (file: File) => {
+    if (aiPriceBook.length === 0) {
+      setAiError('Price book is still loading. Please try again in a moment.')
+      return
+    }
+
     setAiLoading(true)
     setAiError(null)
     setAiDetected(false)
 
     try {
-      // 1. Correctly compress the image
       const compressed = await resizeImage(file)
 
-      // 2. Convert the COMPRESSED file to base64
       const base64 = await new Promise<string>((resolve, reject) => {
         const reader = new FileReader()
         reader.onload = () => resolve((reader.result as string).split(',')[1])
         reader.onerror = () => reject(new Error('Failed to read image file'))
-        reader.readAsDataURL(compressed) // 🔗 FIXED: Reading 'compressed' now!
+        reader.readAsDataURL(compressed)
       })
 
       const response = await fetch('/api/gemini', {
@@ -105,48 +117,42 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
           base64,
           mimeType: compressed.type || 'image/jpeg',
           availableColors: CAR_COLORS,
+          priceBook: aiPriceBook,
         }),
       })
 
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        throw new Error(err.error ?? `Server error ${response.status}`)
-      }
+      const data = await response.json().catch(() => null)
+      if (!response.ok || !data) throw new Error(data?.error ?? `Server error ${response.status}`)
 
-      const parsed = await response.json()
-      // parsed = { plateNumber, brand, model, color }
-
-      // Auto-fill plate + color (always safe to fill)
+      // brand/model come straight from the price book (server-validated), or '' if no match
       setFormData(prev => ({
         ...prev,
-        plateNumber: parsed.plateNumber
-          ? parsed.plateNumber.toUpperCase().replace(/[^A-Z0-9\s]/g, '')
-          : prev.plateNumber,
-        color: parsed.color && CAR_COLORS.includes(parsed.color) ? parsed.color : prev.color,
-        // Only set brand if it exists in the price book
-        brand: parsed.brand && brands.includes(parsed.brand) ? parsed.brand : prev.brand,
+        plateNumber: data.plateNumber || prev.plateNumber,
+        color: CAR_COLORS.includes(data.color) ? data.color : prev.color,
+        brand: data.matched ? data.brand : '',
       }))
+      setSelectedModels(data.matched ? [data.model] : [])
 
-      // Auto-select model only when brand also matched
-      if (parsed.model && parsed.brand && brands.includes(parsed.brand)) {
-        const matchedModels = priceBook
-          .filter(i => i.brand === parsed.brand)
-          .map(i => i.model as string)
-        const matchedModel = matchedModels.find(
-          m => m.toLowerCase() === parsed.model.toLowerCase()
-        )
-        if (matchedModel) setSelectedModels([matchedModel])
+      if (data.matched) {
+        setAiDetected(true)
+        showToast.success(t('intake.aiDetected' as any))
+      } else if (data.plateNumber || data.color) {
+        setAiDetected(true)
+        showToast.warning('Car not found in price book. Please select brand and model manually.')
+      } else {
+        setAiError('Could not detect any car details. Please fill the form manually.')
       }
-
-      setAiDetected(true)
-      showToast.success(t('intake.aiDetected' as any))
     } catch (err: any) {
       console.error('Gemini error:', err)
-      setAiError(err.message ?? 'Could not detect car details. Please fill the form manually.')
+      setAiError(
+        err instanceof TypeError
+          ? 'Network error. Check your connection and try again.'
+          : err.message ?? 'Could not detect car details. Please fill the form manually.'
+      )
     } finally {
       setAiLoading(false)
     }
-  }, [priceBook, t])
+  }, [aiPriceBook, t])
 
   // ─── Image helpers ──────────────────────────────────────────────────────────
 
@@ -156,7 +162,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
     setImagePreviewUrl(URL.createObjectURL(file))
     setAiDetected(false)
     setAiError(null)
-    analyzeCarWithGemini(file, availableBrands)
+    analyzeCarWithGemini(file)
   }
 
   /** Called by the hidden <input type="file"> — mobile path */
@@ -353,7 +359,7 @@ export default function CarEntryIntake({ onTransactionAdded }: CarEntryIntakePro
             {imageFile && !aiLoading && (
               <button
                 type="button"
-                onClick={() => analyzeCarWithGemini(imageFile, availableBrands)}
+                onClick={() => analyzeCarWithGemini(imageFile)}
                 className="px-4 py-4 bg-blue-600 text-white rounded-2xl hover:opacity-90 transition-all shadow-lg"
                 title={t('intake.rescanAI' as any)}
               >
