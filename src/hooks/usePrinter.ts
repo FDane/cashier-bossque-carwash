@@ -56,7 +56,15 @@ export const usePrinter = (options: UsePrinterOptions = {}) => {
 
   const checkPrinterStatus = useCallback(async () => {
     try {
-      const response = await fetch('https://printer.bossque.my/api/print', { method: 'GET' })
+      const response = await fetch(
+        'https://printer.bossque.my/status',
+        { method: 'GET' }
+      )
+
+      if (!response.ok) {
+        throw new Error(`Printer status HTTP ${response.status}`)
+      }
+
       const data = await response.json()
       return data
     } catch {
