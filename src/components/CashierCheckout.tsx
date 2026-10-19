@@ -1366,7 +1366,7 @@ export default function CashierCheckout({
               >
                 {processingId || isPrinting ? <Loader2 className="w-6 h-6 animate-spin" /> : null}
                 <Printer className="w-5 h-5" />
-                <span>{isPrinting ? (t('payment.printing' as any) || 'Printing...') : 'Done & Print Receipt'}</span>
+                <span>{isPrinting ? (t('payment.printing' as any) || 'Printing...') : t('payment.donePrintReceipt' as any)}</span>
               </button>
               <button
                 type="button"
@@ -1375,7 +1375,7 @@ export default function CashierCheckout({
                 className="w-full mt-3 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3"
               >
                 <Ban className="w-5 h-5" />
-                <span>Done Without Printing</span>
+                <span>{t('payment.doneWithoutPrinting' as any)}</span>
               </button>
               {printerStatus && printerStatus !== 'ONLINE' && printerStatus !== 'CHECKING' && (
                 <p className="mt-3 text-center text-xs text-amber-500">Printer is {printerStatus.toLowerCase()}; a deliberate print attempt is still allowed.</p>

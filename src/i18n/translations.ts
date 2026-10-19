@@ -221,6 +221,8 @@ export const translations = {
     'payment.success': 'Payment processed successfully',
     'payment.error': 'Error processing payment',
     'payment.printing': 'Printing receipt, please wait...',
+    'payment.donePrintReceipt': 'Done & Print Receipt',
+    'payment.doneWithoutPrinting': 'Done Without Printing',
 
     // Staff Management
     'staff.title': 'Staff Management — Today',
@@ -556,6 +558,8 @@ export const translations = {
     'payment.success': 'Pembayaran berjaya diproses',
     'payment.error': 'Ralat memproses pembayaran',
     'payment.printing': 'Mencetak resit, sila tunggu...',
+    'payment.donePrintReceipt': 'Selesai & Cetak Resit',
+    'payment.doneWithoutPrinting': 'Selesai Tanpa Mencetak',
 
     // Staff Management
     'staff.title': 'Pengurusan Kakitangan — Hari Ini',
