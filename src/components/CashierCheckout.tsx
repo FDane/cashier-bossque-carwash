@@ -291,6 +291,14 @@ export default function CashierCheckout({
       cashDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
       changeDenominations: { 1: 0, 5: 0, 10: 0, 20: 0, 50: 0, 100: 0 },
     })
+
+    if (method === 'CASH' && checkoutModal.paymentMethod !== 'CASH') {
+      const transactionIds = checkoutModal.transactions.map(transaction => transaction.id)
+      void openDrawer(transactionIds).catch((drawerError) => {
+        console.error('Drawer error:', drawerError)
+        toast.error(t('payment.drawerError' as any))
+      })
+    }
   }
 
 
@@ -564,7 +572,6 @@ export default function CashierCheckout({
         checkoutModal.changeDenominations
       )
 
-      const transactionIds = checkoutModal.transactions.map(transaction => transaction.id)
       if (checkoutAction === 'print') {
         try {
           const printJobId = crypto.randomUUID()
@@ -631,14 +638,7 @@ export default function CashierCheckout({
           }
         } catch (printError) {
           console.error('Print error:', printError)
-          toast.error('Transaction completed but receipt printing failed. Please check your printer.')
-        }
-      } else if (checkoutModal.paymentMethod === 'CASH') {
-        try {
-          await openDrawer(transactionIds)
-        } catch (drawerError) {
-          console.error('Drawer error:', drawerError)
-          toast.error('Transaction completed, but the cash drawer did not open. Manual intervention is required.')
+          toast.error(t('payment.printErrorAfterCompletion' as any))
         }
       }
 

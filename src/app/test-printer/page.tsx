@@ -3,14 +3,16 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckCircle2, Clock3, Loader2, Printer, RefreshCw, ShieldCheck, Users, Wallet } from 'lucide-react'
 import { usePrinter } from '@/hooks/usePrinter'
+import { useLanguage } from '@/hooks/useLanguage'
 import type { PrintReceiptData } from '@/lib/printerService'
 
-type TestStatus = 'idle' | 'checking' | 'printing' | 'success' | 'error' | 'uncertain'
+type TestStatus = 'idle' | 'checking' | 'printing' | 'opening-drawer' | 'success' | 'error' | 'uncertain'
 
 const jobId = () => `TEST-${crypto.randomUUID()}`
 
 export default function PrinterTestPage() {
-  const { printReceipt, checkPrinterStatus, isPrinting } = usePrinter()
+  const { t } = useLanguage()
+  const { printReceipt, openDrawer, checkPrinterStatus, isPrinting } = usePrinter()
   const [status, setStatus] = useState<TestStatus>('idle')
   const [message, setMessage] = useState('')
   const [lastJobId, setLastJobId] = useState('')
@@ -88,7 +90,23 @@ export default function PrinterTestPage() {
     }
   }
 
-  const busy = status === 'printing' || status === 'checking'
+  const testOpenDrawer = async () => {
+    if (busy) return
+    const drawerJobId = `TEST-DRAWER-${Date.now()}`
+    setLastJobId(drawerJobId)
+    setStatus('opening-drawer')
+    setMessage(t('printerTest.openingDrawer' as any))
+    try {
+      await openDrawer([drawerJobId])
+      setStatus('success')
+      setMessage(t('printerTest.drawerOpened' as any))
+    } catch {
+      setStatus('error')
+      setMessage(t('printerTest.drawerError' as any))
+    }
+  }
+
+  const busy = status === 'printing' || status === 'checking' || status === 'opening-drawer'
 
   return (
     <main className="min-h-screen bg-zinc-100 px-4 py-8 font-sans text-zinc-950 dark:bg-zinc-950 dark:text-white sm:px-6">
@@ -103,13 +121,14 @@ export default function PrinterTestPage() {
         </div>
         <div className="grid gap-3">
           <button onClick={checkStatus} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-200 px-4 py-3 font-bold hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800">{status === 'checking' ? <Loader2 className="animate-spin" /> : <RefreshCw />} Check Windows Printer Status</button>
+          <button onClick={() => void testOpenDrawer()} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl bg-amber-600 px-4 py-4 font-bold text-white hover:bg-amber-700 disabled:opacity-50"><Wallet /> {t('printerTest.openDrawer' as any)}</button>
           <button onClick={() => void runPrint('online')} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-4 font-bold text-white hover:bg-blue-700 disabled:opacity-50"><ShieldCheck /> Test Online Receipt (Drawer Closed)</button>
           <button onClick={() => void runPrint('cash')} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-4 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"><Wallet /> Test Cash Receipt + Drawer</button>
           <button onClick={() => void runPrint('batch')} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-4 font-bold text-white hover:bg-violet-700 disabled:opacity-50"><Users /> Test Three-Car Batch + One Drawer Pulse</button>
         </div>
         {printerReport && <p className="mt-5 text-center text-xs text-zinc-500">Windows: {printerReport.status || 'Unknown'} · Connected: {printerReport.connected ? 'yes' : 'no'}</p>}
         <div className="mt-6 min-h-20 rounded-2xl bg-zinc-50 p-4 text-center text-sm dark:bg-zinc-800/60">
-          {status === 'printing' || status === 'checking' ? <Loader2 className="mx-auto mb-2 animate-spin text-blue-500" /> : status === 'success' ? <CheckCircle2 className="mx-auto mb-2 text-emerald-500" /> : status === 'uncertain' ? <Clock3 className="mx-auto mb-2 text-amber-500" /> : null}
+          {status === 'printing' || status === 'checking' || status === 'opening-drawer' ? <Loader2 className="mx-auto mb-2 animate-spin text-blue-500" /> : status === 'success' ? <CheckCircle2 className="mx-auto mb-2 text-emerald-500" /> : status === 'uncertain' ? <Clock3 className="mx-auto mb-2 text-amber-500" /> : null}
           <p>{message || 'Ready for a controlled test.'}</p>
           {lastJobId && <p className="mt-2 break-all text-[10px] text-zinc-400">Job: {lastJobId}</p>}
         </div>
