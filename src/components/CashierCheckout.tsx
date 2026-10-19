@@ -19,6 +19,8 @@ import {
   PlusCircle,
   User,
   Palette,
+  Printer,
+  Ban,
 } from 'lucide-react'
 import { Transaction, PaymentMethod } from '@/types'
 import { useLanguage } from '@/hooks/useLanguage'
@@ -39,11 +41,13 @@ import { formatCurrency, formatTime } from '@/lib/utils'
 import { pushKioskState } from '@/lib/kioskBridge'
 import { resizeImage } from '@/lib/imageUtils' // Import image utility
 import { useRouter } from 'next/navigation'
+import type { PrinterStatus } from '@/hooks/useSystemStatus'
 
 interface CashierCheckoutProps {
   pendingTransactions: Transaction[]
   loading: boolean
   printerOnline: boolean
+  printerStatus?: PrinterStatus
   /** Whether the Car Entry (Rekod Kenderaan) sidebar is open on desktop.
    *  Controls the queue grid column count: 3 cols when open (narrower space),
    *  4 cols when closed (full width available). Defaults to true. */
@@ -103,11 +107,11 @@ interface CheckoutModalData {
 export default function CashierCheckout({
   pendingTransactions,
   loading: transactionsLoading,
-  printerOnline,
+  printerStatus,
   isSidebarOpen = true,
 }: CashierCheckoutProps) {
   const { t, language } = useLanguage()
-  const { printReceipt, isPrinting } = usePrinter({ autoRetry: true, retryCount: 2 })
+  const { printReceipt, openDrawer, isPrinting } = usePrinter()
   const [searchQuery, setSearchQuery] = useState('')
   const [priceBook, setPriceBook] = useState<any[]>([])
   const [retailItems, setRetailItems] = useState<any[]>([])
@@ -496,7 +500,7 @@ export default function CashierCheckout({
     }
   }
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (checkoutAction: 'print' | 'no-print') => {
     if (checkoutModal.transactions.length === 0 || !checkoutModal.paymentMethod) {
       toast.error(t('payment.error.invalidCash' as any))
       return
@@ -560,9 +564,10 @@ export default function CashierCheckout({
         checkoutModal.changeDenominations
       )
 
-      // Print ONE combined receipt for all transactions (only if printer is online)
-      if (printerOnline)
+      const transactionIds = checkoutModal.transactions.map(transaction => transaction.id)
+      if (checkoutAction === 'print') {
         try {
+          const printJobId = crypto.randomUUID()
           if (checkoutModal.transactions.length === 1) {
             // Single car — print normally
             const trans = checkoutModal.transactions[0]
@@ -584,6 +589,7 @@ export default function CashierCheckout({
               totalAmount: totalWithAddons,
               timestamp: trans.checkInTime instanceof Date ? trans.checkInTime : new Date(trans.checkInTime),
               notes: checkoutModal.notes || undefined,
+              printJobId,
             })
           } else {
             // Multiple cars — print ONE combined receipt
@@ -620,13 +626,23 @@ export default function CashierCheckout({
               totalAmount: totalWithAddons,
               timestamp: firstTrans.checkInTime instanceof Date ? firstTrans.checkInTime : new Date(firstTrans.checkInTime),
               notes: checkoutModal.notes || undefined,
+              printJobId,
             })
           }
-          toast.success(t('payment.success' as any))
         } catch (printError) {
           console.error('Print error:', printError)
           toast.error('Transaction completed but receipt printing failed. Please check your printer.')
         }
+      } else if (checkoutModal.paymentMethod === 'CASH') {
+        try {
+          await openDrawer(transactionIds)
+        } catch (drawerError) {
+          console.error('Drawer error:', drawerError)
+          toast.error('Transaction completed, but the cash drawer did not open. Manual intervention is required.')
+        }
+      }
+
+      toast.success(t('payment.success' as any))
 
       setSelectedIds([])
 
@@ -1338,7 +1354,7 @@ export default function CashierCheckout({
 
               {/* Checkout Button */}
               <button
-                onClick={handleCheckout}
+                onClick={() => handleCheckout('print')}
                 disabled={
                   processingId !== null ||
                   isPrinting ||
@@ -1349,8 +1365,21 @@ export default function CashierCheckout({
                 className="w-full bg-green-600 hover:bg-green-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white font-bold py-5 px-6 rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 text-xl shadow-lg shadow-green-500/20"
               >
                 {processingId || isPrinting ? <Loader2 className="w-6 h-6 animate-spin" /> : null}
-                <span>{isPrinting ? (t('payment.printing' as any) || 'Printing...') : (t('payment.checkout' as any))}</span>
+                <Printer className="w-5 h-5" />
+                <span>{isPrinting ? (t('payment.printing' as any) || 'Printing...') : 'Done & Print Receipt'}</span>
               </button>
+              <button
+                type="button"
+                onClick={() => handleCheckout('no-print')}
+                disabled={processingId !== null || isPrinting || !checkoutModal.paymentMethod || (checkoutModal.paymentMethod === 'CASH' && balance < 0) || isChangeIncomplete}
+                className="w-full mt-3 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-300 dark:disabled:bg-zinc-800 disabled:cursor-not-allowed text-white font-bold py-4 px-6 rounded-2xl transition-all flex items-center justify-center gap-3"
+              >
+                <Ban className="w-5 h-5" />
+                <span>Done Without Printing</span>
+              </button>
+              {printerStatus && printerStatus !== 'ONLINE' && printerStatus !== 'CHECKING' && (
+                <p className="mt-3 text-center text-xs text-amber-500">Printer is {printerStatus.toLowerCase()}; a deliberate print attempt is still allowed.</p>
+              )}
             </div>
           </div>
         </div>

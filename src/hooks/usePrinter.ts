@@ -2,11 +2,13 @@ import { useState, useCallback } from 'react'
 import { PrintReceiptData } from '@/lib/printerService'
 
 export interface UsePrinterOptions {
+  // Kept for source compatibility. Print jobs are never automatically retried:
+  // a timeout may happen after the printer has accepted the job.
   autoRetry?: boolean
   retryCount?: number
 }
 
-export const usePrinter = (options: UsePrinterOptions = {}) => {
+export const usePrinter = (_options: UsePrinterOptions = {}) => {
   const [isPrinting, setIsPrinting] = useState(false)
   const [printError, setPrintError] = useState<string | null>(null)
   const [lastPrintedAt, setLastPrintedAt] = useState<Date | null>(null)
@@ -16,49 +18,46 @@ export const usePrinter = (options: UsePrinterOptions = {}) => {
       setIsPrinting(true)
       setPrintError(null)
 
-      let lastError: Error | null = null
+      try {
+        const response = await fetch('https://printer.bossque.my/print', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...receiptData, printJobId: receiptData.printJobId || crypto.randomUUID() }),
+        });
 
-      for (let attempt = 0; attempt < (options.retryCount || 1); attempt++) {
-        try {
-          const response = await fetch('https://printer.bossque.my/print', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(receiptData),
-          });
-
-          if (!response.ok) {
-            const errorData = await response.json()
-            throw new Error(errorData.error || 'Failed to print receipt')
-          }
-
-          const result = await response.json()
-          setLastPrintedAt(new Date())
-          setIsPrinting(false)
-          return result
-
-        } catch (error) {
-          lastError = error instanceof Error ? error : new Error(String(error))
-          // console.error(`Print attempt ${attempt + 1} failed:`, lastError.message) // Removed to fix lint warning
-
-          if (attempt < (options.retryCount || 1) - 1) {
-            // Wait before retrying
-            await new Promise(resolve => setTimeout(resolve, 1000))
-          }
-        }
+        const result = await response.json().catch(() => ({}))
+        if (!response.ok) throw new Error(result.error || `Print server HTTP ${response.status}`)
+        setLastPrintedAt(new Date())
+        setIsPrinting(false)
+        return result
+      } catch (error) {
+        const lastError = error instanceof Error ? error : new Error(String(error))
+        setPrintError(lastError.message)
+        setIsPrinting(false)
+        throw lastError
       }
-
-      setPrintError(lastError?.message || 'Failed to print receipt')
-      setIsPrinting(false)
-      throw lastError
     },
-    [options]
+    []
   )
+
+  const openDrawer = useCallback(async (transactionIds: string[]) => {
+    const token = await import('@/lib/firebase').then(({ auth }) => auth.currentUser?.getIdToken())
+    if (!token) throw new Error('Cashier authentication is required to open the drawer')
+    const response = await fetch('https://printer.bossque.my/drawer/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await token}` },
+      body: JSON.stringify({ drawerJobId: crypto.randomUUID(), transactionIds }),
+    })
+    const result = await response.json().catch(() => ({}))
+    if (!response.ok) throw new Error(result.error || `Drawer server HTTP ${response.status}`)
+    return result
+  }, [])
 
   const checkPrinterStatus = useCallback(async () => {
     try {
       const response = await fetch(
         'https://printer.bossque.my/status',
-        { method: 'GET' }
+        { method: 'GET', cache: 'no-store' }
       )
 
       if (!response.ok) {
@@ -74,6 +73,7 @@ export const usePrinter = (options: UsePrinterOptions = {}) => {
 
   return {
     printReceipt,
+    openDrawer,
     checkPrinterStatus,
     isPrinting,
     printError,

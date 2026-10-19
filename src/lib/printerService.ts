@@ -24,6 +24,7 @@ export interface PrintReceiptData {
     timestamp?: Date
     transactionId: string // Dikekalkan dalam interface, tapi tidak akan diprint
     notes?: string
+    printJobId?: string
 }
 
 const formatPrice = (price: number) => `RM ${price.toFixed(2)}`

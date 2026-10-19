@@ -1,178 +1,120 @@
 'use client'
 
-import React, { useState } from 'react'
-import Image from 'next/image'
+import { useState } from 'react'
+import { AlertTriangle, CheckCircle2, Clock3, Loader2, Printer, RefreshCw, ShieldCheck, Users, Wallet } from 'lucide-react'
 import { usePrinter } from '@/hooks/usePrinter'
+import type { PrintReceiptData } from '@/lib/printerService'
+
+type TestStatus = 'idle' | 'checking' | 'printing' | 'success' | 'error' | 'uncertain'
+
+const jobId = () => `TEST-${crypto.randomUUID()}`
 
 export default function PrinterTestPage() {
-  const { printReceipt } = usePrinter()
-  const [status, setStatus] = useState<'idle' | 'printing' | 'success' | 'error'>('idle')
-  const [errorMessage, setErrorMessage] = useState('')
+  const { printReceipt, checkPrinterStatus, isPrinting } = usePrinter()
+  const [status, setStatus] = useState<TestStatus>('idle')
+  const [message, setMessage] = useState('')
+  const [lastJobId, setLastJobId] = useState('')
+  const [printerReport, setPrinterReport] = useState<{ connected: boolean; status?: string } | null>(null)
 
-  const handleTestPrint = async (type: 'simple' | 'full' | 'multi') => {
+  const receipt = (paymentMethod: 'CASH' | 'ONLINE', printJobId: string): PrintReceiptData => ({
+    transactionId: `TEST-${paymentMethod}-${Date.now()}`,
+    printJobId,
+    plateNumber: 'TEST 1234',
+    brand: 'Perodua',
+    model: 'Viva',
+    color: 'Silver',
+    services: { exterior: true, interior: true, engine: false },
+    basePrice: 15,
+    addons: [{ name: 'Tyre Shine', price: 3, quantity: 1 }],
+    miscCharges: [],
+    paymentMethod,
+    cashReceived: paymentMethod === 'CASH' ? 50 : undefined,
+    change: paymentMethod === 'CASH' ? 32 : undefined,
+    totalAmount: 18,
+    notes: paymentMethod === 'CASH'
+      ? 'Printer test: cash payment. Drawer should open once.'
+      : 'Printer test: online payment. Drawer must remain closed.',
+  })
+
+  const batchReceipt = (printJobId: string): PrintReceiptData => ({
+    transactionId: `TEST-BATCH-${Date.now()}`,
+    printJobId,
+    plateNumber: 'TEST 1111, TEST 2222, TEST 3333',
+    brand: '', model: '', color: '',
+    services: { exterior: false, interior: false, engine: false },
+    basePrice: 0,
+    addons: [{ name: 'Wax Premium', price: 5, quantity: 1 }],
+    miscCharges: [
+      { name: 'TEST 1111 (Viva)|Cucian Luar Dalam', price: 24 },
+      { name: 'TEST 2222 (Vios)|Cucian Luar', price: 18 },
+      { name: 'TEST 3333 (City)|Cucian Luar Dalam Enjin', price: 35 },
+    ],
+    paymentMethod: 'CASH',
+    cashReceived: 100,
+    change: 18,
+    totalAmount: 82,
+    notes: 'Printer test: three-car batch. Drawer should open once.',
+  })
+
+  const runPrint = async (kind: 'online' | 'cash' | 'batch') => {
+    if (isPrinting) return
+    const printJobId = jobId()
+    setLastJobId(printJobId)
     setStatus('printing')
-    setErrorMessage('')
-
+    setMessage('Sending one job to the Windows spooler. Do not click again if it takes time.')
     try {
-      let testData
-
-      if (type === 'multi') {
-        const cars = [
-          { plateNumber: 'VBA 1234', brand: 'Perodua', model: 'Viva', services: { exterior: true, interior: true, engine: false }, price: 24.00 },
-          { plateNumber: 'JHB 5678', brand: 'Toyota', model: 'Vios', services: { exterior: true, interior: false, engine: false }, price: 18.00 },
-          { plateNumber: 'KL 9999', brand: 'Honda', model: 'City', services: { exterior: true, interior: true, engine: true }, price: 35.00 },
-        ]
-
-        const combinedMiscCharges = cars.map(car => {
-          const svcs = []
-          if (car.services.exterior) svcs.push('Luar')
-          if (car.services.interior) svcs.push('Dalam')
-          if (car.services.engine) svcs.push('Enjin')
-          const serviceLabel = svcs.length > 0 ? `Cucian ${svcs.join(' ')}` : 'Cucian'
-          return {
-            name: `${car.plateNumber} (${car.brand} ${car.model})|${serviceLabel}`,
-            price: car.price,
-          }
-        })
-
-        testData = {
-          transactionId: `TEST-MULTI-${Math.floor(Math.random() * 10000)}`,
-          plateNumber: cars.map(c => c.plateNumber).join(', '),
-          brand: '',
-          model: '',
-          color: '',
-          services: { exterior: false, interior: false, engine: false },
-          basePrice: 0,
-          addons: [{ name: 'Wax Premium', price: 5.00, quantity: 1 }],
-          miscCharges: combinedMiscCharges,
-          paymentMethod: 'CASH' as const,
-          cashReceived: 100.00,
-          change: 18.00,
-          totalAmount: 82.00,
-          notes: 'Multi-car batch receipt test.',
-        }
-      } else {
-        testData = {
-          transactionId: `TEST-${Math.floor(Math.random() * 10000)}`,
-          plateNumber: type === 'simple' ? 'TEST-PING' : 'VBA 1234',
-          brand: 'Perodua',
-          model: 'Viva',
-          color: 'Silver',
-          services: {
-            exterior: true,
-            interior: type === 'full',
-            engine: false,
-          },
-          basePrice: type === 'simple' ? 0 : 15.00,
-          addons: type === 'full' ? [{ name: 'Tyre Shine', price: 3.00, quantity: 1 }] : [],
-          miscCharges: [],
-          paymentMethod: 'CASH' as const,
-          cashReceived: 20.00,
-          change: 2.00,
-          totalAmount: type === 'simple' ? 0 : 18.00,
-          notes: type === 'simple' ? 'Hardware connection test successful.' : 'Full receipt layout test.',
-        }
-      }
-
-      await printReceipt(testData)
+      await printReceipt(kind === 'batch' ? batchReceipt(printJobId) : receipt(kind === 'cash' ? 'CASH' : 'ONLINE', printJobId))
       setStatus('success')
-      setTimeout(() => setStatus('idle'), 4000)
-
+      setMessage(kind === 'online' ? 'Receipt accepted. The cash drawer should stay closed.' : 'Receipt accepted. Verify the paper and drawer physically.')
     } catch (error) {
-      setStatus('error')
-      setErrorMessage(error instanceof Error ? error.message : 'Unknown error occurred')
+      const text = error instanceof Error ? error.message : 'Unknown printer error'
+      const uncertain = /timeout|abort|network|fetch|HTTP 5/i.test(text)
+      setStatus(uncertain ? 'uncertain' : 'error')
+      setMessage(uncertain ? `${text} The job may already have reached the printer. Do not retry automatically; inspect the printer first.` : text)
     }
   }
 
+  const checkStatus = async () => {
+    setStatus('checking')
+    setMessage('Checking the print server and Windows spooler...')
+    const result = await checkPrinterStatus()
+    if (result?.printer) {
+      setPrinterReport(result.printer)
+      setStatus('success')
+      setMessage(result.printer.connected ? 'Windows reports the printer queue is ready.' : 'Windows reports the printer is not ready.')
+    } else {
+      setStatus('error')
+      setMessage('Could not verify the printer status.')
+    }
+  }
+
+  const busy = status === 'printing' || status === 'checking'
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-zinc-100 to-zinc-200 p-6 flex flex-col items-center justify-center font-sans">
-      
-      <div className="bg-white p-8 sm:p-10 rounded-3xl shadow-xl w-full max-w-md border border-zinc-100">
-        
-        {/* Header */}
-        <div className="flex flex-col items-center mb-8 text-center">
-          <div className="w-24 h-24 mb-4 relative rounded-2xl overflow-hidden bg-zinc-50 border border-zinc-100 shadow-inner flex items-center justify-center">
-            <Image 
-              src="/logo.png" 
-              alt="Carwash Bossque Logo" 
-              fill
-              className="object-contain p-2"
-              priority
-            />
-          </div>
-          <h1 className="text-2xl font-extrabold text-zinc-900 tracking-tight">
-            Hardware Diagnostics
-          </h1>
-          <p className="text-zinc-500 text-sm mt-2 leading-relaxed">
-            Send test payloads directly to the local POS-58 printer. Database saves are disabled for these tests.
-          </p>
+    <main className="min-h-screen bg-zinc-100 px-4 py-8 font-sans text-zinc-950 dark:bg-zinc-950 dark:text-white sm:px-6">
+      <section className="mx-auto max-w-2xl rounded-[2rem] bg-white p-6 shadow-xl dark:bg-zinc-900 sm:p-10">
+        <div className="mb-8 flex items-start gap-4">
+          <div className="rounded-2xl bg-blue-600 p-3 text-white"><Printer /></div>
+          <div><h1 className="text-2xl font-black">Real-life printer test</h1><p className="mt-1 text-sm text-zinc-500">Uses the same receipt endpoint and idempotent job behavior as checkout.</p></div>
         </div>
-
-        {/* Action Buttons */}
-        <div className="space-y-4">
-          <button
-            onClick={() => handleTestPrint('simple')}
-            disabled={status === 'printing'}
-            className="w-full bg-white border-2 border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50 text-zinc-700 font-semibold py-3.5 px-4 rounded-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-            Quick Connection Test
-          </button>
-
-          <button
-            onClick={() => handleTestPrint('full')}
-            disabled={status === 'printing'}
-            className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3.5 px-4 rounded-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-            Print Full Dummy Receipt
-          </button>
-
-          <button
-            onClick={() => handleTestPrint('multi')}
-            disabled={status === 'printing'}
-            className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold py-3.5 px-4 rounded-2xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/30 flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5 opacity-80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
-            Print Multi-Car Receipt (3 Cars)
-          </button>
+        <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+          <div className="flex gap-2 font-bold"><AlertTriangle className="h-4 w-4 shrink-0" /> Hardware warning</div>
+          <p className="mt-1">Cash tests pulse the drawer. A timeout may still mean the printer accepted the job, so inspect before trying again.</p>
         </div>
-
-        {/* Status Feedback */}
-        <div className="mt-8 h-16 flex items-center justify-center">
-          {status === 'idle' && (
-            <span className="text-zinc-400 text-sm flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-              Printer service standing by
-            </span>
-          )}
-
-          {status === 'printing' && (
-            <div className="text-blue-600 font-medium text-sm flex items-center gap-3 bg-blue-50 px-4 py-2 rounded-full border border-blue-100">
-              <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Sending job to Windows Spooler...
-            </div>
-          )}
-          
-          {status === 'success' && (
-            <div className="text-emerald-700 font-medium text-sm bg-emerald-50 px-4 py-2 rounded-full border border-emerald-200 flex items-center gap-2 animate-in fade-in slide-in-from-bottom-2">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
-              Print job sent successfully!
-            </div>
-          )}
-
-          {status === 'error' && (
-            <div className="text-red-600 text-sm bg-red-50 p-3 rounded-xl border border-red-200 w-full animate-in fade-in slide-in-from-bottom-2 text-center">
-              <span className="font-semibold block mb-1">Failed to Print</span>
-              {errorMessage}
-            </div>
-          )}
+        <div className="grid gap-3">
+          <button onClick={checkStatus} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl border border-zinc-200 px-4 py-3 font-bold hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:hover:bg-zinc-800">{status === 'checking' ? <Loader2 className="animate-spin" /> : <RefreshCw />} Check Windows Printer Status</button>
+          <button onClick={() => void runPrint('online')} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-4 font-bold text-white hover:bg-blue-700 disabled:opacity-50"><ShieldCheck /> Test Online Receipt (Drawer Closed)</button>
+          <button onClick={() => void runPrint('cash')} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-4 font-bold text-white hover:bg-emerald-700 disabled:opacity-50"><Wallet /> Test Cash Receipt + Drawer</button>
+          <button onClick={() => void runPrint('batch')} disabled={busy} className="flex items-center justify-center gap-2 rounded-2xl bg-violet-600 px-4 py-4 font-bold text-white hover:bg-violet-700 disabled:opacity-50"><Users /> Test Three-Car Batch + One Drawer Pulse</button>
         </div>
-
-      </div>
-    </div>
+        {printerReport && <p className="mt-5 text-center text-xs text-zinc-500">Windows: {printerReport.status || 'Unknown'} · Connected: {printerReport.connected ? 'yes' : 'no'}</p>}
+        <div className="mt-6 min-h-20 rounded-2xl bg-zinc-50 p-4 text-center text-sm dark:bg-zinc-800/60">
+          {status === 'printing' || status === 'checking' ? <Loader2 className="mx-auto mb-2 animate-spin text-blue-500" /> : status === 'success' ? <CheckCircle2 className="mx-auto mb-2 text-emerald-500" /> : status === 'uncertain' ? <Clock3 className="mx-auto mb-2 text-amber-500" /> : null}
+          <p>{message || 'Ready for a controlled test.'}</p>
+          {lastJobId && <p className="mt-2 break-all text-[10px] text-zinc-400">Job: {lastJobId}</p>}
+        </div>
+        <p className="mt-6 text-center text-xs text-zinc-400">A successful response confirms command acceptance, not physical paper output.</p>
+      </section>
+    </main>
   )
 }

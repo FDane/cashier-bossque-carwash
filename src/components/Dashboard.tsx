@@ -32,7 +32,7 @@ const BILLS = [100, 50, 20, 10, 5, 1] as const
 
 export default function Dashboard() {
   const { t, language } = useLanguage()
-  const { printerOnline, kioskOnline, checkPrinter, checkKiosk } = useSystemStatus()
+  const { printerOnline, printerStatus, lastPrinterSuccess, kioskOnline, checkPrinter, checkKiosk } = useSystemStatus()
   const [activeTab, setActiveTab] = useState<TabState>('intake')
   const [isCarEntryOpen, setIsCarEntryOpen] = useState(true)
   
@@ -269,23 +269,30 @@ export default function Dashboard() {
     }
   }
 
-  const StatusBadge = ({ online }: { online: boolean | null }) => {
-    if (online === null) return (
+  const StatusBadge = ({ status, online, lastSuccess }: { status?: 'ONLINE' | 'UNSTABLE' | 'OFFLINE' | 'CHECKING' | null; online?: boolean | null; lastSuccess?: Date | null }) => {
+    if (status === undefined) status = online === null ? 'CHECKING' : online ? 'ONLINE' : 'OFFLINE'
+    if (status === null || status === 'CHECKING') return (
       <div className="flex items-center gap-1.5">
         <div className="w-1.5 h-1.5 rounded-full bg-zinc-300 dark:bg-zinc-700 animate-pulse" />
         <span className="text-[10px] font-black text-zinc-400 uppercase tracking-widest">Checking</span>
       </div>
     )
-    if (online) return (
+    if (status === 'ONLINE') return (
       <div className="flex items-center gap-1.5">
         <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
         <span className="text-[10px] font-black text-emerald-600 dark:text-emerald-500 uppercase tracking-widest">Online</span>
       </div>
     )
+    if (status === 'UNSTABLE') return (
+      <div className="flex items-center gap-1.5" title="Temporary status failures; printing is still allowed.">
+        <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+        <span className="text-[10px] font-black text-amber-600 dark:text-amber-400 uppercase tracking-widest">Unstable</span>
+      </div>
+    )
     return (
       <div className="flex items-center gap-1.5">
         <div className="w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
-        <span className="text-[10px] font-black text-red-600 dark:text-red-500 uppercase tracking-widest">Offline</span>
+        <span className="text-[10px] font-black text-red-600 dark:text-red-500 uppercase tracking-widest" title={lastSuccess ? `Last successful check: ${lastSuccess.toLocaleTimeString()}` : 'No successful printer check yet'}>Offline</span>
       </div>
     )
   }
@@ -333,7 +340,7 @@ export default function Dashboard() {
               <span className="text-[10px] font-black text-zinc-500 uppercase tracking-widest">{t('common.printer' as any)}</span>
             </div>
             <div className="flex items-center gap-2">
-              <StatusBadge online={printerOnline} />
+              <StatusBadge status={printerStatus} lastSuccess={lastPrinterSuccess} />
               <RefreshCw className="w-2.5 h-2.5 text-zinc-300 dark:text-zinc-700 group-hover:rotate-180 transition-all duration-500" />
             </div>
           </button>
@@ -409,6 +416,7 @@ export default function Dashboard() {
                 pendingTransactions={pendingTransactions}
                 loading={pendingLoading}
                 printerOnline={printerOnline ?? false}
+                printerStatus={printerStatus}
               />
             </div>
           )}
@@ -446,6 +454,7 @@ export default function Dashboard() {
                 pendingTransactions={pendingTransactions}
                 loading={pendingLoading}
                 printerOnline={printerOnline ?? false}
+                printerStatus={printerStatus}
                 isSidebarOpen={isCarEntryOpen}
               />
             </div>

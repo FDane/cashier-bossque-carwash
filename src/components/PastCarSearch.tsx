@@ -153,6 +153,7 @@ export default function PastCarSearch() {
       cashReceived: transaction.cashReceived || 0,
       change: transaction.change || 0,
       totalAmount: calculateTotal(transaction),
+      printJobId: crypto.randomUUID(),
     }
 
     const res = await fetch('https://printer.bossque.my/print', {
